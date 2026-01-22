@@ -2,14 +2,33 @@
 const API_BASE = window.location.origin;
 
 // Bitcoin library reference
-const bitcoin = window.bitcoinjs;
+let bitcoin, BIP32;
 
-// Initialize BIP32 with tiny-secp256k1
-const ecc = window.tinysecp256k1;
-const BIP32 = window.BIP32Factory(ecc);
+// Wait for libraries to load
+function initializeLibraries() {
+    try {
+        bitcoin = window.bitcoinjs;
+        
+        if (!bitcoin) {
+            console.error('bitcoinjs-lib not loaded');
+            return false;
+        }
 
-// Attach to bitcoin object for compatibility
-bitcoin.bip32 = BIP32;
+        // Try to initialize BIP32
+        if (window.tinysecp256k1 && window.BIP32Factory) {
+            const ecc = window.tinysecp256k1;
+            BIP32 = window.BIP32Factory(ecc);
+            bitcoin.bip32 = BIP32;
+        } else {
+            console.warn('BIP32 not available, fingerprints will not be extracted');
+        }
+        
+        return true;
+    } catch (error) {
+        console.error('Failed to initialize libraries:', error);
+        return false;
+    }
+}
 
 // Global state
 let allXpubs = [];
@@ -40,10 +59,24 @@ const psbtListDiv = document.getElementById('psbt-list');
 
 // Initialize app
 document.addEventListener('DOMContentLoaded', () => {
-    loadXpubs();
-    loadPsbts();
-    setupEventListeners();
-    generateHeaderQRCode();
+    // Wait a moment for external scripts to load
+    setTimeout(() => {
+        if (initializeLibraries()) {
+            loadXpubs();
+            loadPsbts();
+            setupEventListeners();
+            generateHeaderQRCode();
+        } else {
+            // Retry after longer delay
+            setTimeout(() => {
+                initializeLibraries();
+                loadXpubs();
+                loadPsbts();
+                setupEventListeners();
+                generateHeaderQRCode();
+            }, 1000);
+        }
+    }, 100);
 });
 
 // Generate QR code in header
