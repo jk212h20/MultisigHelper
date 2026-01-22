@@ -36,7 +36,23 @@ document.addEventListener('DOMContentLoaded', () => {
     loadXpubs();
     loadPsbts();
     setupEventListeners();
+    generateHeaderQRCode();
 });
+
+// Generate QR code in header
+function generateHeaderQRCode() {
+    const qrContainer = document.getElementById('header-qrcode');
+    if (qrContainer && typeof QRCode !== 'undefined') {
+        new QRCode(qrContainer, {
+            text: window.location.origin,
+            width: 128,
+            height: 128,
+            colorDark: "#000000",
+            colorLight: "#ffffff",
+            correctLevel: QRCode.CorrectLevel.M
+        });
+    }
+}
 
 // Event Listeners
 function setupEventListeners() {
