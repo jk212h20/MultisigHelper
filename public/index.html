@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MultisigHelper - Bitcoin Multisig Wallet Coordinator</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🔐 MultisigHelper</h1>
+            <p class="subtitle">Bitcoin Multisig Wallet Coordinator</p>
+        </header>
+
+        <main>
+            <!-- XPub Management Section -->
+            <section class="card">
+                <h2>📋 XPub Management</h2>
+                
+                <div class="form-group">
+                    <label for="xpub-label">Label:</label>
+                    <input type="text" id="xpub-label" placeholder="e.g., Alice's Ledger">
+                    
+                    <label for="xpub-input">Extended Public Key (xpub):</label>
+                    <textarea id="xpub-input" rows="3" placeholder="xpub6C..."></textarea>
+                    
+                    <button id="add-xpub-btn" class="btn btn-primary">Add XPub</button>
+                </div>
+
+                <div id="xpub-list" class="xpub-list">
+                    <p class="loading">Loading xpubs...</p>
+                </div>
+            </section>
+
+            <!-- Multisig Configuration Section -->
+            <section class="card">
+                <h2>🔧 Multisig Wallet Configuration</h2>
+                
+                <div class="form-group">
+                    <div class="inline-inputs">
+                        <div>
+                            <label for="m-value">Required Signatures (M):</label>
+                            <input type="number" id="m-value" min="1" value="2">
+                        </div>
+                        <div>
+                            <label for="n-value">Total Keys (N):</label>
+                            <input type="number" id="n-value" min="2" value="3">
+                        </div>
+                    </div>
+
+                    <label>Select Keys for Multisig:</label>
+                    <div id="xpub-selection" class="xpub-selection">
+                        <p class="info">Add xpubs above to create a multisig wallet</p>
+                    </div>
+
+                    <label for="address-index">Address Index:</label>
+                    <input type="number" id="address-index" min="0" value="0">
+
+                    <button id="generate-address-btn" class="btn btn-primary">Generate Address</button>
+                </div>
+
+                <div id="address-output" class="output"></div>
+            </section>
+
+            <!-- PSBT Collaboration Section -->
+            <section class="card">
+                <h2>🤝 PSBT Collaboration</h2>
+                
+                <div class="form-group">
+                    <h3>Upload New PSBT</h3>
+                    <label for="psbt-name">Name/Description:</label>
+                    <input type="text" id="psbt-name" placeholder="e.g., Office Supplies Payment - $500">
+                    
+                    <label for="psbt-upload-input">PSBT (Base64 or Hex):</label>
+                    <textarea id="psbt-upload-input" rows="4" placeholder="Paste PSBT here..."></textarea>
+                    
+                    <label for="psbt-notes">Notes (optional):</label>
+                    <textarea id="psbt-notes" rows="2" placeholder="Additional notes about this transaction..."></textarea>
+                    
+                    <button id="upload-psbt-btn" class="btn btn-primary">Upload PSBT</button>
+                </div>
+
+                <div id="psbt-upload-output" class="output"></div>
+
+                <h3 style="margin-top: 30px;">Stored PSBTs</h3>
+                <div id="psbt-list" class="psbt-list">
+                    <p class="loading">Loading PSBTs...</p>
+                </div>
+            </section>
+
+            <!-- PSBT Verification Section -->
+            <section class="card">
+                <h2>📝 Quick PSBT Verification</h2>
+                
+                <div class="form-group">
+                    <label for="psbt-input">PSBT (Base64 or Hex):</label>
+                    <textarea id="psbt-input" rows="4" placeholder="Paste PSBT here..."></textarea>
+                    
+                    <button id="verify-psbt-btn" class="btn btn-primary">Verify PSBT</button>
+                </div>
+
+                <div id="psbt-output" class="output"></div>
+            </section>
+        </main>
+
+        <footer>
+            <p>⚠️ This tool never stores or transmits private keys. All cryptographic operations happen in your browser.</p>
+        </footer>
+    </div>
+
+    <!-- Load Bitcoin libraries from CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/bitcoinjs-lib@6.1.5/dist/bitcoinjs-lib.min.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>

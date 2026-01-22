@@ -1,0 +1,500 @@
+/* Global Styles */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    line-height: 1.6;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    padding: 20px;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+/* Header */
+header {
+    text-align: center;
+    color: white;
+    margin-bottom: 30px;
+}
+
+header h1 {
+    font-size: 2.5rem;
+    margin-bottom: 10px;
+}
+
+.subtitle {
+    font-size: 1.1rem;
+    opacity: 0.9;
+}
+
+/* Card Sections */
+.card {
+    background: white;
+    border-radius: 12px;
+    padding: 30px;
+    margin-bottom: 25px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+}
+
+.card h2 {
+    color: #333;
+    margin-bottom: 20px;
+    border-bottom: 2px solid #667eea;
+    padding-bottom: 10px;
+}
+
+/* Forms */
+.form-group {
+    margin-bottom: 20px;
+}
+
+label {
+    display: block;
+    margin-bottom: 5px;
+    color: #555;
+    font-weight: 500;
+}
+
+input[type="text"],
+input[type="number"],
+textarea {
+    width: 100%;
+    padding: 10px;
+    border: 2px solid #ddd;
+    border-radius: 6px;
+    font-size: 14px;
+    margin-bottom: 15px;
+    font-family: inherit;
+    transition: border-color 0.3s;
+}
+
+input[type="text"]:focus,
+input[type="number"]:focus,
+textarea:focus {
+    outline: none;
+    border-color: #667eea;
+}
+
+textarea {
+    resize: vertical;
+    font-family: 'Courier New', monospace;
+}
+
+/* Buttons */
+.btn {
+    padding: 12px 24px;
+    border: none;
+    border-radius: 6px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.btn-primary {
+    background: #667eea;
+    color: white;
+}
+
+.btn-primary:hover {
+    background: #5568d3;
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+}
+
+.btn-secondary {
+    background: #6c757d;
+    color: white;
+    padding: 8px 16px;
+    font-size: 14px;
+}
+
+.btn-secondary:hover {
+    background: #5a6268;
+}
+
+.btn-danger {
+    background: #dc3545;
+    color: white;
+    padding: 8px 16px;
+    font-size: 14px;
+}
+
+.btn-danger:hover {
+    background: #c82333;
+}
+
+/* Inline Inputs */
+.inline-inputs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+    margin-bottom: 15px;
+}
+
+/* XPub List */
+.xpub-list {
+    margin-top: 20px;
+}
+
+.xpub-item {
+    background: #f8f9fa;
+    border: 2px solid #e9ecef;
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: border-color 0.3s;
+}
+
+.xpub-item:hover {
+    border-color: #667eea;
+}
+
+.xpub-info {
+    flex: 1;
+}
+
+.xpub-label {
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 5px;
+}
+
+.xpub-key {
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    color: #666;
+    word-break: break-all;
+}
+
+.xpub-actions {
+    display: flex;
+    gap: 10px;
+}
+
+/* XPub Selection */
+.xpub-selection {
+    border: 2px solid #e9ecef;
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 15px;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.xpub-checkbox {
+    display: flex;
+    align-items: center;
+    padding: 10px;
+    margin-bottom: 8px;
+    background: #f8f9fa;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.xpub-checkbox:hover {
+    background: #e9ecef;
+}
+
+.xpub-checkbox input[type="checkbox"] {
+    margin-right: 10px;
+    width: auto;
+    cursor: pointer;
+}
+
+.xpub-checkbox label {
+    margin: 0;
+    cursor: pointer;
+    flex: 1;
+}
+
+/* Output Sections */
+.output {
+    margin-top: 20px;
+}
+
+.output.success {
+    background: #d4edda;
+    border: 2px solid #c3e6cb;
+    border-radius: 8px;
+    padding: 20px;
+}
+
+.output.error {
+    background: #f8d7da;
+    border: 2px solid #f5c6cb;
+    border-radius: 8px;
+    padding: 20px;
+    color: #721c24;
+}
+
+.address-display {
+    margin-top: 15px;
+}
+
+.address-value {
+    font-family: 'Courier New', monospace;
+    font-size: 18px;
+    font-weight: 600;
+    color: #333;
+    word-break: break-all;
+    background: white;
+    padding: 15px;
+    border-radius: 6px;
+    margin: 10px 0;
+}
+
+.derivation-paths {
+    margin-top: 15px;
+    font-size: 14px;
+}
+
+.derivation-path {
+    font-family: 'Courier New', monospace;
+    background: white;
+    padding: 8px;
+    border-radius: 4px;
+    margin: 5px 0;
+}
+
+.wallet-descriptor {
+    margin-top: 15px;
+}
+
+.descriptor-value {
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    background: white;
+    padding: 15px;
+    border-radius: 6px;
+    word-break: break-all;
+    margin-top: 10px;
+}
+
+/* PSBT Display */
+.psbt-details {
+    margin-top: 15px;
+}
+
+.tx-info {
+    background: white;
+    padding: 15px;
+    border-radius: 6px;
+    margin: 10px 0;
+}
+
+.tx-info h4 {
+    margin-bottom: 10px;
+    color: #333;
+}
+
+.tx-item {
+    padding: 8px;
+    background: #f8f9fa;
+    margin: 5px 0;
+    border-radius: 4px;
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+}
+
+/* Footer */
+footer {
+    text-align: center;
+    color: white;
+    padding: 20px;
+    margin-top: 30px;
+    opacity: 0.9;
+}
+
+/* PSBT List */
+.psbt-list {
+    margin-top: 20px;
+}
+
+.psbt-item {
+    background: #f8f9fa;
+    border: 2px solid #e9ecef;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 15px;
+    transition: all 0.3s;
+}
+
+.psbt-item:hover {
+    border-color: #667eea;
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.1);
+}
+
+.psbt-item.status-ready {
+    border-color: #28a745;
+    background: #f0f9f4;
+}
+
+.psbt-item.status-pending {
+    border-color: #ffc107;
+    background: #fffdf0;
+}
+
+.psbt-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 15px;
+}
+
+.psbt-title {
+    flex: 1;
+}
+
+.psbt-name {
+    font-size: 18px;
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 5px;
+}
+
+.psbt-meta {
+    font-size: 14px;
+    color: #666;
+    margin-top: 5px;
+}
+
+.psbt-status {
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.psbt-status.pending {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.psbt-status.ready {
+    background: #d4edda;
+    color: #155724;
+}
+
+.psbt-progress {
+    margin: 15px 0;
+}
+
+.psbt-progress-bar {
+    background: #e9ecef;
+    height: 8px;
+    border-radius: 4px;
+    overflow: hidden;
+    margin-top: 8px;
+}
+
+.psbt-progress-fill {
+    background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+    height: 100%;
+    transition: width 0.3s;
+}
+
+.psbt-progress-fill.complete {
+    background: linear-gradient(90deg, #28a745 0%, #20c997 100%);
+}
+
+.psbt-notes {
+    background: white;
+    padding: 10px;
+    border-radius: 6px;
+    font-size: 14px;
+    color: #555;
+    margin: 10px 0;
+    font-style: italic;
+}
+
+.psbt-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 15px;
+}
+
+.btn-success {
+    background: #28a745;
+    color: white;
+    padding: 8px 16px;
+    font-size: 14px;
+}
+
+.btn-success:hover {
+    background: #218838;
+}
+
+.btn-info {
+    background: #17a2b8;
+    color: white;
+    padding: 8px 16px;
+    font-size: 14px;
+}
+
+.btn-info:hover {
+    background: #138496;
+}
+
+/* Utility Classes */
+.loading {
+    text-align: center;
+    color: #999;
+    padding: 20px;
+}
+
+.info {
+    color: #666;
+    font-style: italic;
+    text-align: center;
+    padding: 15px;
+}
+
+.error-message {
+    color: #721c24;
+    font-weight: 600;
+}
+
+.success-message {
+    color: #155724;
+    font-weight: 600;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    header h1 {
+        font-size: 2rem;
+    }
+    
+    .card {
+        padding: 20px;
+    }
+    
+    .inline-inputs {
+        grid-template-columns: 1fr;
+    }
+    
+    .xpub-item {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .xpub-actions {
+        margin-top: 10px;
+        width: 100%;
+    }
+}
