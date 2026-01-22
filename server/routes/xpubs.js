@@ -5,7 +5,8 @@ const { xpubOperations } = require('../database');
 // Validate xpub format (basic check)
 function isValidXpub(xpub) {
   // Check if it starts with xpub, ypub, or zpub and has reasonable length
-  const xpubRegex = /^(xpub|ypub|zpub)[1-9A-HJ-NP-Za-km-z]{100,120}$/;
+  // More permissive to accept various formats from different wallets
+  const xpubRegex = /^(xpub|ypub|zpub|Xpub|Ypub|Zpub)[1-9A-HJ-NP-Za-km-z]{70,120}$/;
   return xpubRegex.test(xpub);
 }
 
