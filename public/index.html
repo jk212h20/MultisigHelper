@@ -109,12 +109,9 @@
         </footer>
     </div>
 
-    <!-- Load Bitcoin libraries from CDN -->
-    <script src="https://bundle.run/buffer@6.0.3"></script>
-    <script src="https://bundle.run/tiny-secp256k1@2.2.3"></script>
-    <script src="https://bundle.run/bip32@4.0.0"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bitcoinjs-lib@6.1.5/dist/bitcoinjs-lib.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <!-- Load only QRCode library (non-blocking) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" defer></script>
+    <!-- Bitcoin libraries will be loaded dynamically only when needed -->
     <script src="app.js"></script>
 </body>
 </html>

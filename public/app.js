@@ -3,31 +3,62 @@ const API_BASE = window.location.origin;
 
 // Bitcoin library reference
 let bitcoin, BIP32;
+let librariesLoaded = false;
+let librariesLoading = false;
 
-// Wait for libraries to load
-function initializeLibraries() {
+// Dynamically load Bitcoin libraries when needed
+async function loadBitcoinLibraries() {
+    if (librariesLoaded) return true;
+    if (librariesLoading) {
+        // Wait for ongoing load
+        while (librariesLoading) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+        }
+        return librariesLoaded;
+    }
+    
+    librariesLoading = true;
+    
     try {
+        // Load scripts in order
+        await loadScript('https://bundle.run/buffer@6.0.3');
+        await loadScript('https://bundle.run/tiny-secp256k1@2.2.3');
+        await loadScript('https://bundle.run/bip32@4.0.0');
+        await loadScript('https://cdn.jsdelivr.net/npm/bitcoinjs-lib@6.1.5/dist/bitcoinjs-lib.min.js');
+        
+        // Initialize
         bitcoin = window.bitcoinjs;
         
         if (!bitcoin) {
-            console.error('bitcoinjs-lib not loaded');
-            return false;
+            throw new Error('bitcoinjs-lib failed to load');
         }
 
-        // Try to initialize BIP32
+        // Initialize BIP32
         if (window.tinysecp256k1 && window.BIP32Factory) {
             const ecc = window.tinysecp256k1;
             BIP32 = window.BIP32Factory(ecc);
             bitcoin.bip32 = BIP32;
-        } else {
-            console.warn('BIP32 not available, fingerprints will not be extracted');
         }
         
+        librariesLoaded = true;
+        librariesLoading = false;
         return true;
     } catch (error) {
-        console.error('Failed to initialize libraries:', error);
+        console.error('Failed to load Bitcoin libraries:', error);
+        librariesLoading = false;
         return false;
     }
+}
+
+// Helper to load script dynamically
+function loadScript(src) {
+    return new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = src;
+        script.onload = resolve;
+        script.onerror = reject;
+        document.head.appendChild(script);
+    });
 }
 
 // Global state
@@ -59,19 +90,15 @@ const psbtListDiv = document.getElementById('psbt-list');
 
 // Initialize app
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('DOM loaded, initializing immediately...');
+    console.log('DOM loaded, loading data immediately...');
     
     // Load data IMMEDIATELY - don't wait for anything
     loadXpubs();
     loadPsbts();
     setupEventListeners();
     
-    // Initialize libraries in background (only needed for descriptor generation)
+    // Generate QR in background when available
     setTimeout(() => {
-        const success = initializeLibraries();
-        console.log('Library initialization:', success ? 'SUCCESS' : 'FAILED');
-        
-        // Generate QR if library available
         if (typeof QRCode !== 'undefined') {
             generateHeaderQRCode();
         }
@@ -236,8 +263,18 @@ async function deleteXpub(id) {
 }
 
 // Multisig Address Generation
-function generateAddress() {
+async function generateAddress() {
     try {
+        // Show loading message
+        addressOutput.className = 'output';
+        addressOutput.innerHTML = '<p>⏳ Loading Bitcoin libraries...</p>';
+        
+        // Load libraries if needed
+        const loaded = await loadBitcoinLibraries();
+        if (!loaded) {
+            throw new Error('Failed to load Bitcoin libraries. Please check your internet connection.');
+        }
+        
         // Get selected xpubs
         const checkboxes = document.querySelectorAll('#xpub-selection input[type="checkbox"]:checked');
         const selectedXpubs = Array.from(checkboxes).map(cb => cb.dataset.xpub);
@@ -391,12 +428,22 @@ function toggleDescriptorQR(qrId) {
 }
 
 // PSBT Verification
-function verifyPsbt() {
+async function verifyPsbt() {
     try {
         const psbtString = psbtInput.value.trim();
         
         if (!psbtString) {
             throw new Error('Please enter a PSBT');
+        }
+
+        // Show loading message
+        psbtOutput.className = 'output';
+        psbtOutput.innerHTML = '<p>⏳ Loading Bitcoin libraries...</p>';
+        
+        // Load libraries if needed
+        const loaded = await loadBitcoinLibraries();
+        if (!loaded) {
+            throw new Error('Failed to load Bitcoin libraries. Please check your internet connection.');
         }
 
         // Try to parse PSBT
@@ -573,6 +620,16 @@ async function uploadPsbt() {
     }
 
     try {
+        // Show loading message
+        psbtUploadOutput.className = 'output';
+        psbtUploadOutput.innerHTML = '<p>⏳ Loading Bitcoin libraries...</p>';
+        
+        // Load libraries if needed
+        const loaded = await loadBitcoinLibraries();
+        if (!loaded) {
+            throw new Error('Failed to load Bitcoin libraries. Please check your internet connection.');
+        }
+        
         // Parse PSBT to extract info
         let psbt;
         try {
@@ -698,6 +755,13 @@ async function updatePsbtSignatures(id) {
     if (!newPsbtString) return;
 
     try {
+        // Load libraries if needed
+        const loaded = await loadBitcoinLibraries();
+        if (!loaded) {
+            alert('Failed to load Bitcoin libraries. Please check your internet connection.');
+            return;
+        }
+        
         // Parse the new PSBT
         let newPsbt;
         try {
