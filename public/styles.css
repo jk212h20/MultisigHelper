@@ -25,14 +25,42 @@ header {
     margin-bottom: 30px;
 }
 
+.header-title-wrapper {
+    position: relative;
+    display: inline-block;
+}
+
 header h1 {
     font-size: 2.5rem;
     margin-bottom: 10px;
+    cursor: pointer;
 }
 
 .subtitle {
     font-size: 1.1rem;
     opacity: 0.9;
+}
+
+/* Header QR Code - Hidden by default, shown on hover */
+.header-qrcode-hidden {
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: white;
+    padding: 15px;
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s, visibility 0.3s;
+    margin-top: 10px;
+    z-index: 1000;
+}
+
+.header-title-wrapper:hover .header-qrcode-hidden {
+    opacity: 1;
+    visibility: visible;
 }
 
 /* Card Sections */

@@ -9,10 +9,11 @@
 <body>
     <div class="container">
         <header>
-            <h1>🔐 MultisigHelper</h1>
+            <div class="header-title-wrapper">
+                <h1>🔐 BitChill Multisig Demo</h1>
+                <div id="header-qrcode" class="header-qrcode-hidden"></div>
+            </div>
             <p class="subtitle">Bitcoin Multisig Wallet Coordinator</p>
-            <div id="header-qrcode" style="margin-top: 20px;"></div>
-            <p style="color: white; font-size: 14px; margin-top: 10px;">📱 Scan to share this app</p>
         </header>
 
         <main>
@@ -56,10 +57,7 @@
                         <p class="info">Add xpubs above to create a multisig wallet</p>
                     </div>
 
-                    <label for="address-index">Address Index:</label>
-                    <input type="number" id="address-index" min="0" value="0">
-
-                    <button id="generate-address-btn" class="btn btn-primary">Generate Address</button>
+                    <button id="generate-address-btn" class="btn btn-primary">Generate Wallet Descriptor</button>
                 </div>
 
                 <div id="address-output" class="output"></div>
@@ -112,6 +110,9 @@
     </div>
 
     <!-- Load Bitcoin libraries from CDN -->
+    <script src="https://bundle.run/buffer@6.0.3"></script>
+    <script src="https://bundle.run/tiny-secp256k1@2.2.3"></script>
+    <script src="https://bundle.run/bip32@4.0.0"></script>
     <script src="https://cdn.jsdelivr.net/npm/bitcoinjs-lib@6.1.5/dist/bitcoinjs-lib.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script src="app.js"></script>

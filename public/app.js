@@ -4,6 +4,13 @@ const API_BASE = window.location.origin;
 // Bitcoin library reference
 const bitcoin = window.bitcoinjs;
 
+// Initialize BIP32 with tiny-secp256k1
+const ecc = window.tinysecp256k1;
+const BIP32 = window.BIP32Factory(ecc);
+
+// Attach to bitcoin object for compatibility
+bitcoin.bip32 = BIP32;
+
 // Global state
 let allXpubs = [];
 let allPsbts = [];
@@ -250,26 +257,17 @@ function generateAddress() {
 }
 
 function displayAddressResult(address, m, n, index, xpubs, pubkeys) {
-    const derivationPath = `m/84'/0'/0'/0/${index}`;
-    
     // Generate wallet descriptor with fingerprints
     const descriptor = generateWalletDescriptor(m, xpubs);
     const descriptorQRId = 'descriptor-qr-' + Date.now();
     
     addressOutput.className = 'output success';
     addressOutput.innerHTML = `
-        <h3 class="success-message">✅ Multisig Address Generated</h3>
+        <h3 class="success-message">✅ Wallet Descriptor Generated</h3>
         
         <div class="address-display">
             <strong>Configuration:</strong> ${m}-of-${n} Multisig<br>
-            <strong>Address Index:</strong> ${index}
-        </div>
-        
-        <div class="address-value">${address}</div>
-        
-        <div class="derivation-paths">
-            <strong>Derivation Path:</strong> ${derivationPath}<br>
-            <small>(Applied to each xpub below)</small>
+            <strong>Type:</strong> Native Segwit (P2WSH)
         </div>
         
         <div class="wallet-descriptor">
@@ -284,24 +282,14 @@ function displayAddressResult(address, m, n, index, xpubs, pubkeys) {
         
         <div class="wallet-descriptor">
             <strong>Selected XPubs (${xpubs.length}):</strong>
-            ${xpubs.map((xpub, i) => `
-                <div class="derivation-path">
-                    ${i + 1}. ${xpub.substring(0, 20)}...${xpub.substring(xpub.length - 20)}
-                </div>
-            `).join('')}
-        </div>
-
-        <div class="wallet-descriptor">
-            <strong>Public Keys at Index ${index}:</strong>
-            ${pubkeys.map((pk, i) => `
-                <div class="derivation-path">
-                    ${i + 1}. ${pk.toString('hex')}
-                </div>
-            `).join('')}
+            ${xpubs.map((xpub, i) => {
+                const shortXpub = xpub.substring(0, 20) + '...' + xpub.substring(xpub.length - 20);
+                return `<div class="derivation-path">${i + 1}. ${shortXpub}</div>`;
+            }).join('')}
         </div>
 
         <p style="margin-top: 15px; color: #155724;">
-            ⚠️ Verify this address on your hardware wallet before sending funds!
+            ℹ️ Import this descriptor into Sparrow Wallet, Bitcoin Core, or other compatible software to generate addresses and manage your multisig wallet.
         </p>
     `;
     
