@@ -113,14 +113,23 @@ function setupEventListeners() {
 
 // XPub Management Functions
 async function loadXpubs() {
+    console.log('Loading xpubs from:', `${API_BASE}/api/xpubs`);
     try {
         const response = await fetch(`${API_BASE}/api/xpubs`);
-        if (!response.ok) throw new Error('Failed to load xpubs');
+        console.log('Response status:', response.status);
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Response error:', errorText);
+            throw new Error(`Failed to load xpubs: ${response.status}`);
+        }
         
         allXpubs = await response.json();
+        console.log('Loaded xpubs:', allXpubs.length);
         displayXpubs();
         updateXpubSelection();
     } catch (error) {
+        console.error('Error in loadXpubs:', error);
         xpubListDiv.innerHTML = `<p class="error-message">Error loading xpubs: ${error.message}</p>`;
     }
 }
