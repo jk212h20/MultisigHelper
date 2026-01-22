@@ -283,6 +283,23 @@ textarea {
     margin-top: 10px;
 }
 
+.descriptor-qr {
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    display: inline-block;
+}
+
+.psbt-qr-container {
+    background: #f8f9fa;
+    border: 2px solid #e9ecef;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.psbt-qr-container p {
+    margin: 0;
+}
+
 /* PSBT Display */
 .psbt-details {
     margin-top: 15px;

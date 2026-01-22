@@ -252,6 +252,10 @@ function generateAddress() {
 function displayAddressResult(address, m, n, index, xpubs, pubkeys) {
     const derivationPath = `m/84'/0'/0'/0/${index}`;
     
+    // Generate wallet descriptor with fingerprints
+    const descriptor = generateWalletDescriptor(m, xpubs);
+    const descriptorQRId = 'descriptor-qr-' + Date.now();
+    
     addressOutput.className = 'output success';
     addressOutput.innerHTML = `
         <h3 class="success-message">✅ Multisig Address Generated</h3>
@@ -266,6 +270,16 @@ function displayAddressResult(address, m, n, index, xpubs, pubkeys) {
         <div class="derivation-paths">
             <strong>Derivation Path:</strong> ${derivationPath}<br>
             <small>(Applied to each xpub below)</small>
+        </div>
+        
+        <div class="wallet-descriptor">
+            <strong>Wallet Descriptor:</strong>
+            <div class="descriptor-value" id="descriptor-text">${escapeHtml(descriptor)}</div>
+            <div style="margin-top: 10px;">
+                <button class="btn btn-secondary" onclick="copyDescriptor()">📋 Copy Descriptor</button>
+                <button class="btn btn-secondary" onclick="toggleDescriptorQR('${descriptorQRId}')">📱 Toggle QR</button>
+            </div>
+            <div id="${descriptorQRId}" class="descriptor-qr" style="display: none; margin-top: 15px; text-align: center;"></div>
         </div>
         
         <div class="wallet-descriptor">
@@ -290,6 +304,61 @@ function displayAddressResult(address, m, n, index, xpubs, pubkeys) {
             ⚠️ Verify this address on your hardware wallet before sending funds!
         </p>
     `;
+    
+    // Store descriptor for later use
+    window.currentDescriptor = descriptor;
+    window.currentDescriptorQRId = descriptorQRId;
+}
+
+// Generate wallet descriptor with fingerprints
+function generateWalletDescriptor(m, xpubs) {
+    try {
+        const descriptorParts = xpubs.map(xpubStr => {
+            const node = bitcoin.bip32.fromBase58(xpubStr);
+            const fingerprint = node.fingerprint.toString('hex');
+            return `[${fingerprint}/84h/0h/0h]${xpubStr}/0/*`;
+        });
+        
+        return `wsh(sortedmulti(${m},${descriptorParts.join(',')}))#checksum`;
+    } catch (e) {
+        return `wsh(sortedmulti(${m},${xpubs.map(x => x + '/0/*').join(',')}))`;
+    }
+}
+
+// Copy descriptor to clipboard
+function copyDescriptor() {
+    const text = window.currentDescriptor;
+    navigator.clipboard.writeText(text).then(() => {
+        alert('✅ Descriptor copied to clipboard!');
+    }).catch(() => {
+        // Fallback
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+        alert('✅ Descriptor copied to clipboard!');
+    });
+}
+
+// Toggle descriptor QR code
+function toggleDescriptorQR(qrId) {
+    const qrContainer = document.getElementById(qrId);
+    if (qrContainer.style.display === 'none') {
+        qrContainer.style.display = 'block';
+        qrContainer.innerHTML = '';
+        new QRCode(qrContainer, {
+            text: window.currentDescriptor,
+            width: 256,
+            height: 256,
+            colorDark: "#000000",
+            colorLight: "#ffffff",
+            correctLevel: QRCode.CorrectLevel.M
+        });
+    } else {
+        qrContainer.style.display = 'none';
+    }
 }
 
 // PSBT Verification
@@ -452,10 +521,12 @@ function displayPsbts() {
                 
                 <div class="psbt-actions">
                     <button class="btn btn-info" onclick="downloadPsbt(${psbt.id})">📥 Download</button>
+                    <button class="btn btn-info" onclick="togglePsbtQR(${psbt.id}, '${escapeHtml(psbt.psbt_data)}')">📱 QR Code</button>
                     <button class="btn btn-success" onclick="updatePsbtSignatures(${psbt.id})">✍️ Add Signature</button>
                     <button class="btn btn-secondary" onclick="viewPsbtDetails(${psbt.id})">👁️ View Details</button>
                     <button class="btn btn-danger" onclick="deletePsbt(${psbt.id})">🗑️ Delete</button>
                 </div>
+                <div id="psbt-qr-${psbt.id}" class="psbt-qr-container" style="display: none; margin-top: 15px; text-align: center; padding: 20px; background: white; border-radius: 8px;"></div>
             </div>
         `;
     }).join('');
@@ -667,6 +738,27 @@ async function deletePsbt(id) {
         alert('PSBT deleted successfully!');
     } catch (error) {
         alert(`Error: ${error.message}`);
+    }
+}
+
+// Toggle PSBT QR code
+function togglePsbtQR(id, psbtData) {
+    const qrContainer = document.getElementById(`psbt-qr-${id}`);
+    if (qrContainer.style.display === 'none') {
+        qrContainer.style.display = 'block';
+        qrContainer.innerHTML = '<p style="margin-bottom: 15px; color: #666;">Scan this QR code with your hardware wallet or mobile signer</p>';
+        const qrDiv = document.createElement('div');
+        qrContainer.appendChild(qrDiv);
+        new QRCode(qrDiv, {
+            text: psbtData,
+            width: 300,
+            height: 300,
+            colorDark: "#000000",
+            colorLight: "#ffffff",
+            correctLevel: QRCode.CorrectLevel.L // Low error correction for max data
+        });
+    } else {
+        qrContainer.style.display = 'none';
     }
 }
 
