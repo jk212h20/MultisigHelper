@@ -59,24 +59,26 @@ const psbtListDiv = document.getElementById('psbt-list');
 
 // Initialize app
 document.addEventListener('DOMContentLoaded', () => {
-    // Wait a moment for external scripts to load
-    setTimeout(() => {
-        if (initializeLibraries()) {
-            loadXpubs();
-            loadPsbts();
-            setupEventListeners();
+    console.log('DOM loaded, waiting for libraries...');
+    
+    // Try to initialize immediately
+    const initAndLoad = () => {
+        const success = initializeLibraries();
+        console.log('Library initialization:', success ? 'SUCCESS' : 'FAILED');
+        
+        // Load data regardless of library status (libraries only needed for descriptor generation)
+        loadXpubs();
+        loadPsbts();
+        setupEventListeners();
+        
+        // Only generate QR if library available
+        if (typeof QRCode !== 'undefined') {
             generateHeaderQRCode();
-        } else {
-            // Retry after longer delay
-            setTimeout(() => {
-                initializeLibraries();
-                loadXpubs();
-                loadPsbts();
-                setupEventListeners();
-                generateHeaderQRCode();
-            }, 1000);
         }
-    }, 100);
+    };
+    
+    // Wait briefly for scripts to load, then initialize
+    setTimeout(initAndLoad, 200);
 });
 
 // Generate QR code in header
