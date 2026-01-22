@@ -1,8 +1,30 @@
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
+const fs = require('fs');
+
+// Determine database path
+// Use persistent storage on Railway, fallback to local for development
+const getDbPath = () => {
+  // Check if we're on Railway with a volume mounted
+  if (process.env.RAILWAY_VOLUME_MOUNT_PATH) {
+    const dbDir = process.env.RAILWAY_VOLUME_MOUNT_PATH;
+    // Ensure directory exists
+    if (!fs.existsSync(dbDir)) {
+      fs.mkdirSync(dbDir, { recursive: true });
+    }
+    const dbPath = path.join(dbDir, 'data.db');
+    console.log(`Using persistent database at: ${dbPath}`);
+    return dbPath;
+  }
+  
+  // Fallback to local development path
+  const dbPath = path.join(__dirname, 'data.db');
+  console.log(`Using local database at: ${dbPath}`);
+  return dbPath;
+};
 
 // Initialize database
-const db = new sqlite3.Database(path.join(__dirname, 'data.db'));
+const db = new sqlite3.Database(getDbPath());
 
 // Create tables
 db.serialize(() => {
