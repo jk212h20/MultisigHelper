@@ -109,9 +109,12 @@
         </footer>
     </div>
 
-    <!-- Load only QRCode library (non-blocking) -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" defer></script>
-    <!-- Bitcoin libraries will be loaded dynamically only when needed -->
+    <!-- Load Bitcoin libraries from reliable CDN -->
+    <script src="https://unpkg.com/buffer@6.0.3/index.js"></script>
+    <script src="https://unpkg.com/tiny-secp256k1@2.2.3/lib/index.js"></script>
+    <script src="https://unpkg.com/bip32@4.0.0/src/bip32.js"></script>
+    <script src="https://unpkg.com/bitcoinjs-lib@6.1.5/dist/bitcoinjs-lib.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script src="app.js"></script>
 </body>
 </html>
