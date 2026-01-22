@@ -58,9 +58,12 @@ const psbtListDiv = document.getElementById('psbt-list');
 
 // Initialize app
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('DOM loaded, loading data immediately...');
+    console.log('DOM loaded, initializing...');
     
-    // Load data IMMEDIATELY - don't wait for anything
+    // Initialize Bitcoin libraries first
+    initializeBitcoinLibraries();
+    
+    // Load data immediately
     loadXpubs();
     loadPsbts();
     setupEventListeners();
