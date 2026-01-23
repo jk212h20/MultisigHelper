@@ -3,30 +3,52 @@ const API_BASE = window.location.origin;
 
 // Bitcoin library reference
 let bitcoin, BIP32;
+let librariesInitialized = false;
 
-// Initialize Bitcoin libraries (loaded from CDN in HTML)
+// Initialize Bitcoin libraries (loaded from ESM loader)
 function initializeBitcoinLibraries() {
     try {
-        bitcoin = window.bitcoinjs;
-        
-        if (!bitcoin) {
-            console.error('bitcoinjs-lib not loaded');
+        // Check if libraries are loaded from ESM loader
+        if (!window.bitcoinjs) {
+            console.log('Waiting for Bitcoin libraries to load...');
             return false;
         }
+        
+        bitcoin = window.bitcoinjs;
 
-        // Initialize BIP32
+        // Initialize BIP32 with ecc
         if (window.tinysecp256k1 && window.BIP32Factory) {
             const ecc = window.tinysecp256k1;
             BIP32 = window.BIP32Factory(ecc);
             bitcoin.bip32 = BIP32;
         }
         
+        librariesInitialized = true;
         console.log('Bitcoin libraries initialized successfully');
         return true;
     } catch (error) {
         console.error('Failed to initialize Bitcoin libraries:', error);
         return false;
     }
+}
+
+// Wait for Bitcoin libraries to be ready
+function waitForBitcoinLibraries() {
+    return new Promise((resolve) => {
+        if (window.bitcoinLibrariesLoaded) {
+            resolve(initializeBitcoinLibraries());
+        } else {
+            window.addEventListener('bitcoinLibrariesReady', () => {
+                resolve(initializeBitcoinLibraries());
+            });
+            // Fallback timeout check
+            setTimeout(() => {
+                if (!librariesInitialized && window.bitcoinjs) {
+                    resolve(initializeBitcoinLibraries());
+                }
+            }, 3000);
+        }
+    });
 }
 
 // Global state
@@ -50,6 +72,7 @@ const psbtOutput = document.getElementById('psbt-output');
 
 // PSBT Collaboration Elements
 const psbtNameInput = document.getElementById('psbt-name');
+const psbtFileInput = document.getElementById('psbt-file');
 const psbtUploadInput = document.getElementById('psbt-upload-input');
 const psbtNotesInput = document.getElementById('psbt-notes');
 const uploadPsbtBtn = document.getElementById('upload-psbt-btn');
@@ -57,16 +80,16 @@ const psbtUploadOutput = document.getElementById('psbt-upload-output');
 const psbtListDiv = document.getElementById('psbt-list');
 
 // Initialize app
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     console.log('DOM loaded, initializing...');
     
-    // Initialize Bitcoin libraries first
-    initializeBitcoinLibraries();
-    
-    // Load data immediately
+    // Load data immediately (doesn't need Bitcoin libraries)
     loadXpubs();
     loadPsbts();
     setupEventListeners();
+    
+    // Wait for Bitcoin libraries to load (async from ESM)
+    await waitForBitcoinLibraries();
     
     // Generate QR in background when available
     setTimeout(() => {
@@ -98,12 +121,62 @@ function setupEventListeners() {
     verifyPsbtBtn.addEventListener('click', verifyPsbt);
     uploadPsbtBtn.addEventListener('click', uploadPsbt);
     
+    // Handle .psbt file upload
+    if (psbtFileInput) {
+        psbtFileInput.addEventListener('change', handlePsbtFileUpload);
+    }
+    
     // Update N value when M changes
     mValueInput.addEventListener('change', () => {
         if (parseInt(mValueInput.value) > parseInt(nValueInput.value)) {
             nValueInput.value = mValueInput.value;
         }
     });
+}
+
+// Handle .psbt file upload
+function handlePsbtFileUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    
+    reader.onload = function(e) {
+        const content = e.target.result;
+        
+        // Check if content is binary (raw PSBT) or text (base64/hex)
+        if (content instanceof ArrayBuffer) {
+            // Convert binary to base64
+            const bytes = new Uint8Array(content);
+            const binary = String.fromCharCode.apply(null, bytes);
+            const base64 = btoa(binary);
+            psbtUploadInput.value = base64;
+        } else {
+            // Text content - use as-is
+            psbtUploadInput.value = content.trim();
+        }
+        
+        // Auto-fill name from filename if empty
+        if (!psbtNameInput.value.trim()) {
+            const filename = file.name.replace(/\.psbt$/i, '').replace(/[_-]/g, ' ');
+            psbtNameInput.value = filename;
+        }
+        
+        // Auto-validate the uploaded PSBT
+        autoValidateUploadedPsbt(file.name);
+    };
+    
+    reader.onerror = function() {
+        psbtUploadOutput.className = 'output error';
+        psbtUploadOutput.innerHTML = '<p class="error-message">Error reading file</p>';
+    };
+    
+    // Try to read as binary first for raw PSBT files
+    if (file.name.endsWith('.psbt')) {
+        reader.readAsArrayBuffer(file);
+    } else {
+        reader.readAsText(file);
+    }
 }
 
 // XPub Management Functions
@@ -251,7 +324,7 @@ function generateAddress() {
 
         const m = parseInt(mValueInput.value);
         const n = parseInt(nValueInput.value);
-        const index = parseInt(addressIndexInput.value);
+        const index = addressIndexInput ? parseInt(addressIndexInput.value) : 0;
 
         // Validation
         if (selectedXpubs.length !== n) {
@@ -429,10 +502,8 @@ function verifyPsbt() {
             }
         }
 
-        // Extract transaction info
-        const tx = psbt.extractTransaction(true); // true = don't finalize
-        
-        displayPsbtResult(psbt, tx);
+        // Display PSBT info directly from PSBT object (don't extract transaction)
+        displayPsbtResult(psbt);
 
     } catch (error) {
         psbtOutput.className = 'output error';
@@ -440,17 +511,26 @@ function verifyPsbt() {
     }
 }
 
-function displayPsbtResult(psbt, tx) {
+function displayPsbtResult(psbt) {
+    // Get inputs from PSBT data directly
     const inputs = psbt.data.inputs.map((input, i) => {
-        const txInput = tx.ins[i];
+        // Get txid/vout from global tx
+        const globalInput = psbt.txInputs[i];
+        let txid = 'Unknown';
+        let vout = 0;
+        if (globalInput) {
+            txid = Buffer.from(globalInput.hash).reverse().toString('hex');
+            vout = globalInput.index;
+        }
         return {
-            txid: txInput.hash.reverse().toString('hex'),
-            vout: txInput.index,
+            txid: txid,
+            vout: vout,
             value: input.witnessUtxo ? input.witnessUtxo.value : 'Unknown'
         };
     });
 
-    const outputs = tx.outs.map((output, i) => {
+    // Get outputs from global tx
+    const outputs = psbt.txOutputs.map((output, i) => {
         let address = 'Unknown';
         try {
             address = bitcoin.address.fromOutputScript(output.script, bitcoin.networks.bitcoin);
@@ -469,15 +549,35 @@ function displayPsbtResult(psbt, tx) {
 
     const totalOutput = outputs.reduce((sum, out) => sum + out.value, 0);
     const fee = totalInput - totalOutput;
+    
+    // Count signatures and determine M-of-N
+    const sigInfo = getSignatureInfo(psbt);
 
     psbtOutput.className = 'output success';
     psbtOutput.innerHTML = `
         <h3 class="success-message">✅ PSBT Parsed Successfully</h3>
         
         <div class="psbt-details">
-            <div class="tx-info">
-                <h4>Transaction ID:</h4>
-                <div class="tx-item">${tx.getId()}</div>
+            <!-- Signature Progress Section -->
+            <div class="tx-info signature-section">
+                <h4>🔏 Signature Status</h4>
+                <div class="signature-progress">
+                    <div class="sig-count">
+                        <span class="sig-current">${sigInfo.signatures}</span>
+                        <span class="sig-separator">/</span>
+                        <span class="sig-required">${sigInfo.required}</span>
+                        <span class="sig-label">signatures</span>
+                    </div>
+                    <div class="sig-progress-bar">
+                        <div class="sig-progress-fill ${sigInfo.isComplete ? 'complete' : ''}" 
+                             style="width: ${sigInfo.percentage}%"></div>
+                    </div>
+                    <div class="sig-status ${sigInfo.isComplete ? 'ready' : 'pending'}">
+                        ${sigInfo.isComplete 
+                            ? '✅ Ready to broadcast' 
+                            : `⏳ Needs ${sigInfo.required - sigInfo.signatures} more signature${sigInfo.required - sigInfo.signatures > 1 ? 's' : ''}`}
+                    </div>
+                </div>
             </div>
 
             <div class="tx-info">
@@ -514,6 +614,47 @@ function displayPsbtResult(psbt, tx) {
             ⚠️ Verify all details carefully before signing this transaction!
         </p>
     `;
+}
+
+// Get signature information from PSBT
+function getSignatureInfo(psbt) {
+    let maxSigs = 0;
+    let mRequired = 2; // Default
+    let nTotal = 2;    // Default
+    
+    psbt.data.inputs.forEach(input => {
+        // Count partial signatures
+        if (input.partialSig && input.partialSig.length > 0) {
+            maxSigs = Math.max(maxSigs, input.partialSig.length);
+        }
+        
+        // Try to extract M-of-N from witness script
+        if (input.witnessScript) {
+            try {
+                const decompiled = bitcoin.script.decompile(input.witnessScript);
+                if (decompiled && decompiled.length >= 4) {
+                    const m = bitcoin.script.number.decode(decompiled[0]);
+                    const n = bitcoin.script.number.decode(decompiled[decompiled.length - 2]);
+                    if (m > 0 && n > 0) {
+                        mRequired = m;
+                        nTotal = n;
+                    }
+                }
+            } catch (e) {
+                // Couldn't parse witness script
+            }
+        }
+    });
+    
+    const percentage = mRequired > 0 ? Math.min(100, (maxSigs / mRequired) * 100) : 0;
+    
+    return {
+        signatures: maxSigs,
+        required: mRequired,
+        total: nTotal,
+        percentage: percentage,
+        isComplete: maxSigs >= mRequired
+    };
 }
 
 // PSBT Collaboration Functions
@@ -822,6 +963,93 @@ function togglePsbtQR(id, psbtData) {
         });
     } else {
         qrContainer.style.display = 'none';
+    }
+}
+
+// Auto-validate PSBT after file upload
+function autoValidateUploadedPsbt(filename) {
+    try {
+        // Initialize libraries if not done yet
+        if (!bitcoin) {
+            initializeBitcoinLibraries();
+        }
+        
+        if (!bitcoin) {
+            psbtUploadOutput.className = 'output success';
+            psbtUploadOutput.innerHTML = `<p class="success-message">✅ File loaded: ${escapeHtml(filename)}</p><p class="info">Libraries loading... validation pending</p>`;
+            return;
+        }
+        
+        const psbtString = psbtUploadInput.value.trim();
+        if (!psbtString) return;
+        
+        // Try to parse PSBT
+        let psbt;
+        try {
+            psbt = bitcoin.Psbt.fromBase64(psbtString);
+        } catch (e) {
+            try {
+                psbt = bitcoin.Psbt.fromHex(psbtString);
+            } catch (e2) {
+                psbtUploadOutput.className = 'output error';
+                psbtUploadOutput.innerHTML = `<p class="error-message">❌ Invalid PSBT file: ${escapeHtml(filename)}</p>`;
+                return;
+            }
+        }
+        
+        // Get signature info
+        const sigInfo = getSignatureInfo(psbt);
+        const inputCount = psbt.data.inputs.length;
+        const outputCount = psbt.txOutputs.length;
+        
+        // Calculate total amounts
+        let totalInput = 0;
+        psbt.data.inputs.forEach(input => {
+            if (input.witnessUtxo) {
+                totalInput += input.witnessUtxo.value;
+            }
+        });
+        
+        let totalOutput = 0;
+        psbt.txOutputs.forEach(output => {
+            totalOutput += output.value;
+        });
+        
+        const fee = totalInput - totalOutput;
+        
+        // Display validation result with signature progress
+        psbtUploadOutput.className = 'output success';
+        psbtUploadOutput.innerHTML = `
+            <h4 style="margin-bottom: 10px;">✅ Valid PSBT: ${escapeHtml(filename)}</h4>
+            
+            <div class="signature-progress" style="margin: 15px 0;">
+                <div class="sig-count" style="font-size: 24px;">
+                    <span class="sig-current">${sigInfo.signatures}</span>
+                    <span class="sig-separator">/</span>
+                    <span class="sig-required">${sigInfo.required}</span>
+                    <span class="sig-label" style="font-size: 14px;">signatures</span>
+                </div>
+                <div class="sig-progress-bar">
+                    <div class="sig-progress-fill ${sigInfo.isComplete ? 'complete' : ''}" 
+                         style="width: ${sigInfo.percentage}%"></div>
+                </div>
+                <div class="sig-status ${sigInfo.isComplete ? 'ready' : 'pending'}" style="font-size: 14px;">
+                    ${sigInfo.isComplete 
+                        ? '✅ Ready to broadcast' 
+                        : `⏳ Needs ${sigInfo.required - sigInfo.signatures} more signature${sigInfo.required - sigInfo.signatures > 1 ? 's' : ''}`}
+                </div>
+            </div>
+            
+            <div style="font-size: 14px; color: #666; margin-top: 10px;">
+                <strong>Transaction:</strong> ${inputCount} input(s) → ${outputCount} output(s)<br>
+                <strong>Total:</strong> ${formatSatoshis(totalInput)}<br>
+                <strong>Fee:</strong> ${formatSatoshis(fee)}
+            </div>
+        `;
+        
+    } catch (error) {
+        psbtUploadOutput.className = 'output error';
+        psbtUploadOutput.innerHTML = `<p class="error-message">Error validating PSBT: ${escapeHtml(error.message)}</p>`;
     }
 }
 

@@ -72,7 +72,10 @@
                     <label for="psbt-name">Name/Description:</label>
                     <input type="text" id="psbt-name" placeholder="e.g., Office Supplies Payment - $500">
                     
-                    <label for="psbt-upload-input">PSBT (Base64 or Hex):</label>
+                    <label for="psbt-file">Upload .psbt File:</label>
+                    <input type="file" id="psbt-file" accept=".psbt,.txt" class="file-input">
+                    
+                    <label for="psbt-upload-input">Or Paste PSBT (Base64 or Hex):</label>
                     <textarea id="psbt-upload-input" rows="4" placeholder="Paste PSBT here..."></textarea>
                     
                     <label for="psbt-notes">Notes (optional):</label>
@@ -109,12 +112,13 @@
         </footer>
     </div>
 
-    <!-- Load Bitcoin libraries from CDN -->
-    <script src="https://cdn.jsdelivr.net/npm/buffer@6.0.3/index.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/tiny-secp256k1@2.2.3/dist/index.browser.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bip32@4.0.0/dist/index.browser.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bitcoinjs-lib@6.1.5/dist/bitcoinjs-lib.min.js"></script>
+    <!-- Load Bitcoin libraries via ESM module (includes Buffer polyfill) -->
+    <script type="module" src="/lib/loader.js"></script>
+    
+    <!-- QR Code library -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-    <script src="app.js"></script>
+    
+    <!-- Main app - loaded as module to ensure proper ordering -->
+    <script type="module" src="app.js"></script>
 </body>
 </html>
