@@ -7,6 +7,7 @@ const usePostgres = !!process.env.DATABASE_URL;
 let db;
 let xpubOperations;
 let psbtOperations;
+let descriptorOperations;
 
 if (usePostgres) {
   // PostgreSQL for production (Railway)
@@ -43,6 +44,18 @@ if (usePostgres) {
           notes TEXT,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS descriptors (
+          id SERIAL PRIMARY KEY,
+          name TEXT NOT NULL,
+          descriptor TEXT NOT NULL,
+          m_required INTEGER NOT NULL,
+          n_total INTEGER NOT NULL,
+          first_address TEXT,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
       `);
       
@@ -138,6 +151,32 @@ if (usePostgres) {
     }
   };
 
+  // Descriptor operations for PostgreSQL
+  descriptorOperations = {
+    getAll: async () => {
+      const result = await pool.query('SELECT * FROM descriptors ORDER BY created_at DESC');
+      return result.rows;
+    },
+
+    getById: async (id) => {
+      const result = await pool.query('SELECT * FROM descriptors WHERE id = $1', [id]);
+      return result.rows[0];
+    },
+
+    create: async (name, descriptor, mRequired, nTotal, firstAddress) => {
+      const result = await pool.query(
+        'INSERT INTO descriptors (name, descriptor, m_required, n_total, first_address) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+        [name, descriptor, mRequired, nTotal, firstAddress]
+      );
+      return result.rows[0];
+    },
+
+    delete: async (id) => {
+      const result = await pool.query('DELETE FROM descriptors WHERE id = $1', [id]);
+      return result.rowCount > 0;
+    }
+  };
+
   db = pool;
 
 } else {
@@ -186,6 +225,18 @@ if (usePostgres) {
         notes TEXT,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    
+    db.run(`
+      CREATE TABLE IF NOT EXISTS descriptors (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        descriptor TEXT NOT NULL,
+        m_required INTEGER NOT NULL,
+        n_total INTEGER NOT NULL,
+        first_address TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
       )
     `);
   });
@@ -322,10 +373,56 @@ if (usePostgres) {
       });
     }
   };
+
+  // Descriptor operations for SQLite
+  descriptorOperations = {
+    getAll: () => {
+      return new Promise((resolve, reject) => {
+        db.all('SELECT * FROM descriptors ORDER BY created_at DESC', [], (err, rows) => {
+          if (err) reject(err);
+          else resolve(rows);
+        });
+      });
+    },
+
+    getById: (id) => {
+      return new Promise((resolve, reject) => {
+        db.get('SELECT * FROM descriptors WHERE id = ?', [id], (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        });
+      });
+    },
+
+    create: (name, descriptor, mRequired, nTotal, firstAddress) => {
+      return new Promise((resolve, reject) => {
+        db.run(
+          'INSERT INTO descriptors (name, descriptor, m_required, n_total, first_address) VALUES (?, ?, ?, ?, ?)',
+          [name, descriptor, mRequired, nTotal, firstAddress],
+          function(err) {
+            if (err) reject(err);
+            else {
+              descriptorOperations.getById(this.lastID).then(resolve).catch(reject);
+            }
+          }
+        );
+      });
+    },
+
+    delete: (id) => {
+      return new Promise((resolve, reject) => {
+        db.run('DELETE FROM descriptors WHERE id = ?', [id], function(err) {
+          if (err) reject(err);
+          else resolve(this.changes > 0);
+        });
+      });
+    }
+  };
 }
 
 module.exports = {
   db,
   xpubOperations,
-  psbtOperations
+  psbtOperations,
+  descriptorOperations
 };

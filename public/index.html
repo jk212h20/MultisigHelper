@@ -19,20 +19,20 @@
         <main>
             <!-- XPub Management Section -->
             <section class="card">
-                <h2>📋 XPub Management</h2>
+                <h2>📋 Add XPub</h2>
                 
                 <div class="form-group">
-                    <label for="xpub-label">Label:</label>
-                    <input type="text" id="xpub-label" placeholder="e.g., Alice's Ledger">
-                    
                     <label for="xpub-input">Extended Public Key (xpub):</label>
                     <textarea id="xpub-input" rows="3" placeholder="xpub6C..."></textarea>
                     
-                    <button id="add-xpub-btn" class="btn btn-primary">Add XPub</button>
-                </div>
-
-                <div id="xpub-list" class="xpub-list">
-                    <p class="loading">Loading xpubs...</p>
+                    <div class="add-xpub-row">
+                        <div class="label-inline">
+                            <label for="xpub-label">Label:</label>
+                            <input type="text" id="xpub-label" class="label-input" placeholder="Key #1">
+                            <span class="auto-label-hint" id="auto-label-hint">(auto)</span>
+                        </div>
+                        <button id="add-xpub-btn" class="btn btn-primary">Add XPub</button>
+                    </div>
                 </div>
             </section>
 
@@ -41,69 +41,63 @@
                 <h2>🔧 Multisig Wallet Configuration</h2>
                 
                 <div class="form-group">
-                    <div class="inline-inputs">
-                        <div>
-                            <label for="m-value">Required Signatures (M):</label>
-                            <input type="number" id="m-value" min="1" value="2">
-                        </div>
-                        <div>
-                            <label for="n-value">Total Keys (N):</label>
-                            <input type="number" id="n-value" min="2" value="3">
-                        </div>
-                    </div>
-
                     <label>Select Keys for Multisig:</label>
                     <div id="xpub-selection" class="xpub-selection">
                         <p class="info">Add xpubs above to create a multisig wallet</p>
                     </div>
 
-                    <button id="generate-address-btn" class="btn btn-primary">Generate Wallet Descriptor</button>
+                    <div class="generate-row">
+                        <div class="mn-inputs">
+                            <label for="m-value">Required:</label>
+                            <input type="number" id="m-value" min="1" max="1" value="1" class="mn-input">
+                            <span class="mn-separator">of</span>
+                            <input type="number" id="n-value" min="0" value="0" class="mn-input" readonly>
+                            <span class="mn-label">keys</span>
+                        </div>
+                        <button id="generate-address-btn" class="btn btn-primary">Generate Wallet Descriptor</button>
+                    </div>
                 </div>
 
                 <div id="address-output" class="output"></div>
             </section>
 
-            <!-- PSBT Collaboration Section -->
+            <!-- Saved Descriptors Section -->
             <section class="card">
-                <h2>🤝 PSBT Collaboration</h2>
+                <h2>📜 Saved Wallet Descriptors</h2>
+                <p class="section-subtitle">Descriptors saved to the server for sharing across devices</p>
                 
-                <div class="form-group">
-                    <h3>Upload New PSBT</h3>
-                    <label for="psbt-name">Name/Description:</label>
-                    <input type="text" id="psbt-name" placeholder="e.g., Office Supplies Payment - $500">
-                    
-                    <label for="psbt-file">Upload .psbt File:</label>
-                    <input type="file" id="psbt-file" accept=".psbt,.txt" class="file-input">
-                    
-                    <label for="psbt-upload-input">Or Paste PSBT (Base64 or Hex):</label>
-                    <textarea id="psbt-upload-input" rows="4" placeholder="Paste PSBT here..."></textarea>
-                    
-                    <label for="psbt-notes">Notes (optional):</label>
-                    <textarea id="psbt-notes" rows="2" placeholder="Additional notes about this transaction..."></textarea>
-                    
-                    <button id="upload-psbt-btn" class="btn btn-primary">Upload PSBT</button>
-                </div>
-
-                <div id="psbt-upload-output" class="output"></div>
-
-                <h3 style="margin-top: 30px;">Stored PSBTs</h3>
-                <div id="psbt-list" class="psbt-list">
-                    <p class="loading">Loading PSBTs...</p>
+                <div id="descriptor-list" class="descriptor-list">
+                    <p class="loading">Loading saved descriptors...</p>
                 </div>
             </section>
 
-            <!-- PSBT Verification Section -->
+            <!-- Upload PSBT Section -->
             <section class="card">
-                <h2>📝 Quick PSBT Verification</h2>
+                <h2>📤 Upload PSBT</h2>
                 
                 <div class="form-group">
-                    <label for="psbt-input">PSBT (Base64 or Hex):</label>
-                    <textarea id="psbt-input" rows="4" placeholder="Paste PSBT here..."></textarea>
+                    <label for="psbt-file">Upload .psbt File:</label>
+                    <input type="file" id="psbt-file" accept=".psbt,.txt" class="file-input">
                     
-                    <button id="verify-psbt-btn" class="btn btn-primary">Verify PSBT</button>
+                    <div class="upload-psbt-row">
+                        <div class="label-inline">
+                            <label for="psbt-name">Name:</label>
+                            <input type="text" id="psbt-name" class="psbt-name-input" placeholder="Payment description...">
+                        </div>
+                        <button id="upload-psbt-btn" class="btn btn-primary">Upload PSBT</button>
+                    </div>
                 </div>
 
-                <div id="psbt-output" class="output"></div>
+                <div id="psbt-upload-output" class="output"></div>
+            </section>
+
+            <!-- Download PSBT Section -->
+            <section class="card">
+                <h2>📥 Download PSBT</h2>
+                
+                <div id="psbt-list" class="psbt-list">
+                    <p class="loading">Loading PSBTs...</p>
+                </div>
             </section>
         </main>
 

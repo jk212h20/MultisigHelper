@@ -3,6 +3,7 @@ const cors = require('cors');
 const path = require('path');
 const xpubsRouter = require('./routes/xpubs');
 const psbtsRouter = require('./routes/psbts');
+const descriptorsRouter = require('./routes/descriptors');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -15,6 +16,7 @@ app.use(express.urlencoded({ extended: true }));
 // API routes
 app.use('/api/xpubs', xpubsRouter);
 app.use('/api/psbts', psbtsRouter);
+app.use('/api/descriptors', descriptorsRouter);
 
 // Serve Bitcoin libraries from node_modules (must be before wildcard route)
 app.get('/lib/bitcoinjs-lib.min.js', (req, res) => {

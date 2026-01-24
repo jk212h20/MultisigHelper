@@ -1,11 +1,14 @@
 # Active Context
 
 ## Current Work Focus
-Setting up the initial project structure and implementing the backend API with frontend UI for Bitcoin multisig wallet coordination.
+The app is now fully deployed on Railway with PostgreSQL for persistent shared data storage.
 
 ## Recent Changes
-- Created memory bank documentation
-- About to create project structure with backend and frontend
+- Added PostgreSQL database support for Railway deployment
+- Fixed data sharing issue - xpubs and PSBTs now persist and are shared across all users
+- Railway CLI used to add PostgreSQL database to the project
+- Updated server/database.js to support both PostgreSQL (production) and SQLite (local dev)
+- Added pg package to dependencies
 
 ## Next Steps
 1. Initialize Node.js project with package.json

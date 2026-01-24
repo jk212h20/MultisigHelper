@@ -4,3 +4,4 @@ server/data.db
 .DS_Store
 .env
 package-lock.json
+*.psbt
