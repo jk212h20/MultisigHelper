@@ -2677,7 +2677,64 @@ function initializeConfirmationTracking() {
             psbt.status !== 'final') {
             startConfirmationTracking(psbt.id, psbt.txid);
         }
+        
+        // Check if "ready" PSBTs without txid might already be on chain (broadcast externally)
+        if (psbt.status === 'ready' && !psbt.txid) {
+            checkIfAlreadyBroadcast(psbt);
+        }
     });
+}
+
+// Check if a "ready" PSBT was already broadcast externally
+async function checkIfAlreadyBroadcast(psbt) {
+    if (!bitcoin) return;
+    
+    try {
+        // Compute the txid by finalizing the PSBT (without actually broadcasting)
+        const result = finalizePsbt(psbt.psbt_data);
+        if (!result.success) return;
+        
+        const txid = result.txid;
+        console.log(`Checking if PSBT "${psbt.name}" (txid: ${txid.substring(0, 12)}...) was already broadcast...`);
+        
+        // Check if this txid exists on the blockchain
+        const confirmResult = await checkConfirmations(txid);
+        
+        if (confirmResult !== null) {
+            // Transaction exists on chain or in mempool!
+            const confs = confirmResult.confirmations;
+            let newStatus;
+            if (confs === 0) {
+                newStatus = 'broadcast';
+            } else if (confs >= 6) {
+                newStatus = 'final';
+            } else {
+                newStatus = `confirmed_${confs}`;
+            }
+            
+            console.log(`Found! PSBT "${psbt.name}" was already broadcast. Status: ${newStatus}, Confirmations: ${confs}`);
+            
+            // Update the database
+            await fetch(`${API_BASE}/api/psbts/${psbt.id}/broadcast`, withSession({
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    txid: txid,
+                    status: newStatus,
+                    confirmations: confs
+                })
+            }));
+            
+            // Reload to reflect changes
+            await loadPsbts();
+            
+            showToast('Transaction Found! 🔍', 
+                `"${psbt.name}" was already broadcast (${confs} confirmations)`, 
+                'info');
+        }
+    } catch (error) {
+        console.log(`Could not check if PSBT "${psbt.name}" was broadcast:`, error.message);
+    }
 }
 
 // Show broadcast confirmation modal
