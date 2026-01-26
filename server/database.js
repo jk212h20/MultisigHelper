@@ -39,6 +39,17 @@ if (usePostgres) {
         ALTER TABLE xpubs ADD COLUMN IF NOT EXISTS session_id TEXT DEFAULT '0'
       `).catch(() => {});
       
+      // Drop old unique constraint on xpub only and create new one on (xpub, session_id)
+      await pool.query(`
+        ALTER TABLE xpubs DROP CONSTRAINT IF EXISTS xpubs_xpub_key
+      `).catch(() => {});
+      await pool.query(`
+        ALTER TABLE xpubs DROP CONSTRAINT IF EXISTS xpubs_xpub_session_id_key
+      `).catch(() => {});
+      await pool.query(`
+        ALTER TABLE xpubs ADD CONSTRAINT xpubs_xpub_session_id_key UNIQUE (xpub, session_id)
+      `).catch(() => {});
+      
       await pool.query(`
         CREATE TABLE IF NOT EXISTS psbts (
           id SERIAL PRIMARY KEY,
