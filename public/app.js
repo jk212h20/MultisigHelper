@@ -2687,18 +2687,28 @@ function initializeConfirmationTracking() {
 
 // Check if a "ready" PSBT was already broadcast externally
 async function checkIfAlreadyBroadcast(psbt) {
-    if (!bitcoin) return;
+    if (!bitcoin) {
+        console.log(`checkIfAlreadyBroadcast: Bitcoin libraries not loaded yet for "${psbt.name}"`);
+        return false;
+    }
     
     try {
         // Compute the txid by finalizing the PSBT (without actually broadcasting)
+        console.log(`checkIfAlreadyBroadcast: Attempting to finalize PSBT "${psbt.name}"...`);
         const result = finalizePsbt(psbt.psbt_data);
-        if (!result.success) return;
+        if (!result.success) {
+            console.log(`checkIfAlreadyBroadcast: Failed to finalize "${psbt.name}": ${result.error}`);
+            return false;
+        }
         
         const txid = result.txid;
-        console.log(`Checking if PSBT "${psbt.name}" (txid: ${txid.substring(0, 12)}...) was already broadcast...`);
+        console.log(`checkIfAlreadyBroadcast: PSBT "${psbt.name}" would have txid: ${txid}`);
+        console.log(`checkIfAlreadyBroadcast: Checking blockchain APIs...`);
         
         // Check if this txid exists on the blockchain
         const confirmResult = await checkConfirmations(txid);
+        
+        console.log(`checkIfAlreadyBroadcast: API result for "${psbt.name}":`, confirmResult);
         
         if (confirmResult !== null) {
             // Transaction exists on chain or in mempool!
@@ -2712,10 +2722,10 @@ async function checkIfAlreadyBroadcast(psbt) {
                 newStatus = `confirmed_${confs}`;
             }
             
-            console.log(`Found! PSBT "${psbt.name}" was already broadcast. Status: ${newStatus}, Confirmations: ${confs}`);
+            console.log(`checkIfAlreadyBroadcast: Found! "${psbt.name}" is on chain. Status: ${newStatus}, Confirmations: ${confs}`);
             
             // Update the database
-            await fetch(`${API_BASE}/api/psbts/${psbt.id}/broadcast`, withSession({
+            const updateResponse = await fetch(`${API_BASE}/api/psbts/${psbt.id}/broadcast`, withSession({
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -2725,16 +2735,24 @@ async function checkIfAlreadyBroadcast(psbt) {
                 })
             }));
             
-            // Reload to reflect changes
-            await loadPsbts();
+            console.log(`checkIfAlreadyBroadcast: Database update response:`, updateResponse.status);
             
-            showToast('Transaction Found! 🔍', 
-                `"${psbt.name}" was already broadcast (${confs} confirmations)`, 
-                'info');
+            if (updateResponse.ok) {
+                showToast('Transaction Found! 🔍', 
+                    `"${psbt.name}" was already broadcast (${confs} confirmations)`, 
+                    'info');
+                
+                // Reload PSBTs to update UI (don't await to avoid recursion issues)
+                setTimeout(() => loadPsbts(), 100);
+                return true; // Signal that we found and updated
+            }
+        } else {
+            console.log(`checkIfAlreadyBroadcast: "${psbt.name}" (txid: ${txid.substring(0, 12)}...) NOT found on blockchain`);
         }
     } catch (error) {
-        console.log(`Could not check if PSBT "${psbt.name}" was broadcast:`, error.message);
+        console.error(`checkIfAlreadyBroadcast: Error for "${psbt.name}":`, error);
     }
+    return false;
 }
 
 // Show broadcast confirmation modal
