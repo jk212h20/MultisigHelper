@@ -27,10 +27,17 @@ if (usePostgres) {
         CREATE TABLE IF NOT EXISTS xpubs (
           id SERIAL PRIMARY KEY,
           label TEXT NOT NULL,
-          xpub TEXT NOT NULL UNIQUE,
-          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          xpub TEXT NOT NULL,
+          session_id TEXT DEFAULT '0',
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE(xpub, session_id)
         )
       `);
+      
+      // Add session_id column if it doesn't exist (migration for existing tables)
+      await pool.query(`
+        ALTER TABLE xpubs ADD COLUMN IF NOT EXISTS session_id TEXT DEFAULT '0'
+      `).catch(() => {});
       
       await pool.query(`
         CREATE TABLE IF NOT EXISTS psbts (
@@ -41,11 +48,27 @@ if (usePostgres) {
           n_total INTEGER NOT NULL,
           signatures_count INTEGER DEFAULT 0,
           status TEXT DEFAULT 'pending',
+          txid TEXT,
+          confirmations INTEGER DEFAULT 0,
           notes TEXT,
+          session_id TEXT DEFAULT '0',
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
       `);
+      
+      // Add session_id column if it doesn't exist (migration for existing tables)
+      await pool.query(`
+        ALTER TABLE psbts ADD COLUMN IF NOT EXISTS session_id TEXT DEFAULT '0'
+      `).catch(() => {});
+      
+      // Add txid and confirmations columns (migration for existing tables)
+      await pool.query(`
+        ALTER TABLE psbts ADD COLUMN IF NOT EXISTS txid TEXT
+      `).catch(() => {});
+      await pool.query(`
+        ALTER TABLE psbts ADD COLUMN IF NOT EXISTS confirmations INTEGER DEFAULT 0
+      `).catch(() => {});
       
       await pool.query(`
         CREATE TABLE IF NOT EXISTS descriptors (
@@ -55,9 +78,15 @@ if (usePostgres) {
           m_required INTEGER NOT NULL,
           n_total INTEGER NOT NULL,
           first_address TEXT,
+          session_id TEXT DEFAULT '0',
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
       `);
+      
+      // Add session_id column if it doesn't exist (migration for existing tables)
+      await pool.query(`
+        ALTER TABLE descriptors ADD COLUMN IF NOT EXISTS session_id TEXT DEFAULT '0'
+      `).catch(() => {});
       
       console.log('PostgreSQL tables initialized');
     } catch (error) {
@@ -69,8 +98,11 @@ if (usePostgres) {
 
   // XPub operations for PostgreSQL
   xpubOperations = {
-    getAll: async () => {
-      const result = await pool.query('SELECT * FROM xpubs ORDER BY created_at DESC');
+    getAll: async (sessionId = '0') => {
+      const result = await pool.query(
+        'SELECT * FROM xpubs WHERE session_id = $1 ORDER BY created_at DESC',
+        [sessionId]
+      );
       return result.rows;
     },
 
@@ -79,10 +111,10 @@ if (usePostgres) {
       return result.rows[0];
     },
 
-    create: async (label, xpub) => {
+    create: async (label, xpub, sessionId = '0') => {
       const result = await pool.query(
-        'INSERT INTO xpubs (label, xpub) VALUES ($1, $2) RETURNING *',
-        [label, xpub]
+        'INSERT INTO xpubs (label, xpub, session_id) VALUES ($1, $2, $3) RETURNING *',
+        [label, xpub, sessionId]
       );
       return result.rows[0];
     },
@@ -103,8 +135,11 @@ if (usePostgres) {
 
   // PSBT operations for PostgreSQL
   psbtOperations = {
-    getAll: async () => {
-      const result = await pool.query('SELECT * FROM psbts ORDER BY created_at DESC');
+    getAll: async (sessionId = '0') => {
+      const result = await pool.query(
+        'SELECT * FROM psbts WHERE session_id = $1 ORDER BY created_at DESC',
+        [sessionId]
+      );
       return result.rows;
     },
 
@@ -113,11 +148,11 @@ if (usePostgres) {
       return result.rows[0];
     },
 
-    create: async (name, psbtData, mRequired, nTotal, signaturesCount, notes = null) => {
+    create: async (name, psbtData, mRequired, nTotal, signaturesCount, notes = null, sessionId = '0') => {
       const status = signaturesCount >= mRequired ? 'ready' : 'pending';
       const result = await pool.query(
-        'INSERT INTO psbts (name, psbt_data, m_required, n_total, signatures_count, status, notes) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
-        [name, psbtData, mRequired, nTotal, signaturesCount, status, notes]
+        'INSERT INTO psbts (name, psbt_data, m_required, n_total, signatures_count, status, notes, session_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *',
+        [name, psbtData, mRequired, nTotal, signaturesCount, status, notes, sessionId]
       );
       return result.rows[0];
     },
@@ -148,13 +183,32 @@ if (usePostgres) {
     delete: async (id) => {
       const result = await pool.query('DELETE FROM psbts WHERE id = $1', [id]);
       return result.rowCount > 0;
+    },
+
+    updateBroadcastStatus: async (id, txid, status, confirmations) => {
+      const result = await pool.query(
+        'UPDATE psbts SET txid = $1, status = $2, confirmations = $3, updated_at = CURRENT_TIMESTAMP WHERE id = $4 RETURNING *',
+        [txid, status, confirmations, id]
+      );
+      return result.rows[0];
+    },
+
+    // Get PSBTs that need confirmation checking (broadcast but not final)
+    getPendingConfirmations: async () => {
+      const result = await pool.query(
+        "SELECT * FROM psbts WHERE status LIKE 'broadcast%' AND status != 'final' AND txid IS NOT NULL"
+      );
+      return result.rows;
     }
   };
 
   // Descriptor operations for PostgreSQL
   descriptorOperations = {
-    getAll: async () => {
-      const result = await pool.query('SELECT * FROM descriptors ORDER BY created_at DESC');
+    getAll: async (sessionId = '0') => {
+      const result = await pool.query(
+        'SELECT * FROM descriptors WHERE session_id = $1 ORDER BY created_at DESC',
+        [sessionId]
+      );
       return result.rows;
     },
 
@@ -163,10 +217,10 @@ if (usePostgres) {
       return result.rows[0];
     },
 
-    create: async (name, descriptor, mRequired, nTotal, firstAddress) => {
+    create: async (name, descriptor, mRequired, nTotal, firstAddress, sessionId = '0') => {
       const result = await pool.query(
-        'INSERT INTO descriptors (name, descriptor, m_required, n_total, first_address) VALUES ($1, $2, $3, $4, $5) RETURNING *',
-        [name, descriptor, mRequired, nTotal, firstAddress]
+        'INSERT INTO descriptors (name, descriptor, m_required, n_total, first_address, session_id) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+        [name, descriptor, mRequired, nTotal, firstAddress, sessionId]
       );
       return result.rows[0];
     },
@@ -202,16 +256,23 @@ if (usePostgres) {
 
   db = new sqlite3.Database(getDbPath());
 
-  // Create tables
+  // Create tables with session support
   db.serialize(() => {
     db.run(`
       CREATE TABLE IF NOT EXISTS xpubs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         label TEXT NOT NULL,
-        xpub TEXT NOT NULL UNIQUE,
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        xpub TEXT NOT NULL,
+        session_id TEXT DEFAULT '0',
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(xpub, session_id)
       )
     `);
+    
+    // Migration: Add session_id column if it doesn't exist
+    db.run(`ALTER TABLE xpubs ADD COLUMN session_id TEXT DEFAULT '0'`, (err) => {
+      // Ignore error if column already exists
+    });
     
     db.run(`
       CREATE TABLE IF NOT EXISTS psbts (
@@ -222,11 +283,27 @@ if (usePostgres) {
         n_total INTEGER NOT NULL,
         signatures_count INTEGER DEFAULT 0,
         status TEXT DEFAULT 'pending',
+        txid TEXT,
+        confirmations INTEGER DEFAULT 0,
         notes TEXT,
+        session_id TEXT DEFAULT '0',
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT DEFAULT CURRENT_TIMESTAMP
       )
     `);
+    
+    // Migration: Add session_id column if it doesn't exist
+    db.run(`ALTER TABLE psbts ADD COLUMN session_id TEXT DEFAULT '0'`, (err) => {
+      // Ignore error if column already exists
+    });
+    
+    // Migration: Add txid and confirmations columns if they don't exist
+    db.run(`ALTER TABLE psbts ADD COLUMN txid TEXT`, (err) => {
+      // Ignore error if column already exists
+    });
+    db.run(`ALTER TABLE psbts ADD COLUMN confirmations INTEGER DEFAULT 0`, (err) => {
+      // Ignore error if column already exists
+    });
     
     db.run(`
       CREATE TABLE IF NOT EXISTS descriptors (
@@ -236,16 +313,22 @@ if (usePostgres) {
         m_required INTEGER NOT NULL,
         n_total INTEGER NOT NULL,
         first_address TEXT,
+        session_id TEXT DEFAULT '0',
         created_at TEXT DEFAULT CURRENT_TIMESTAMP
       )
     `);
+    
+    // Migration: Add session_id column if it doesn't exist
+    db.run(`ALTER TABLE descriptors ADD COLUMN session_id TEXT DEFAULT '0'`, (err) => {
+      // Ignore error if column already exists
+    });
   });
 
   // XPub operations for SQLite (promisified for async/await)
   xpubOperations = {
-    getAll: () => {
+    getAll: (sessionId = '0') => {
       return new Promise((resolve, reject) => {
-        db.all('SELECT * FROM xpubs ORDER BY created_at DESC', [], (err, rows) => {
+        db.all('SELECT * FROM xpubs WHERE session_id = ? ORDER BY created_at DESC', [sessionId], (err, rows) => {
           if (err) reject(err);
           else resolve(rows);
         });
@@ -261,9 +344,9 @@ if (usePostgres) {
       });
     },
 
-    create: (label, xpub) => {
+    create: (label, xpub, sessionId = '0') => {
       return new Promise((resolve, reject) => {
-        db.run('INSERT INTO xpubs (label, xpub) VALUES (?, ?)', [label, xpub], function(err) {
+        db.run('INSERT INTO xpubs (label, xpub, session_id) VALUES (?, ?, ?)', [label, xpub, sessionId], function(err) {
           if (err) reject(err);
           else {
             xpubOperations.getById(this.lastID).then(resolve).catch(reject);
@@ -295,9 +378,9 @@ if (usePostgres) {
 
   // PSBT operations for SQLite
   psbtOperations = {
-    getAll: () => {
+    getAll: (sessionId = '0') => {
       return new Promise((resolve, reject) => {
-        db.all('SELECT * FROM psbts ORDER BY created_at DESC', [], (err, rows) => {
+        db.all('SELECT * FROM psbts WHERE session_id = ? ORDER BY created_at DESC', [sessionId], (err, rows) => {
           if (err) reject(err);
           else resolve(rows);
         });
@@ -313,12 +396,12 @@ if (usePostgres) {
       });
     },
 
-    create: (name, psbtData, mRequired, nTotal, signaturesCount, notes = null) => {
+    create: (name, psbtData, mRequired, nTotal, signaturesCount, notes = null, sessionId = '0') => {
       return new Promise((resolve, reject) => {
         const status = signaturesCount >= mRequired ? 'ready' : 'pending';
         db.run(
-          'INSERT INTO psbts (name, psbt_data, m_required, n_total, signatures_count, status, notes) VALUES (?, ?, ?, ?, ?, ?, ?)',
-          [name, psbtData, mRequired, nTotal, signaturesCount, status, notes],
+          'INSERT INTO psbts (name, psbt_data, m_required, n_total, signatures_count, status, notes, session_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+          [name, psbtData, mRequired, nTotal, signaturesCount, status, notes, sessionId],
           function(err) {
             if (err) reject(err);
             else {
@@ -371,14 +454,43 @@ if (usePostgres) {
           else resolve(this.changes > 0);
         });
       });
+    },
+
+    updateBroadcastStatus: (id, txid, status, confirmations) => {
+      return new Promise((resolve, reject) => {
+        db.run(
+          'UPDATE psbts SET txid = ?, status = ?, confirmations = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+          [txid, status, confirmations, id],
+          (err) => {
+            if (err) reject(err);
+            else {
+              psbtOperations.getById(id).then(resolve).catch(reject);
+            }
+          }
+        );
+      });
+    },
+
+    // Get PSBTs that need confirmation checking (broadcast but not final)
+    getPendingConfirmations: () => {
+      return new Promise((resolve, reject) => {
+        db.all(
+          "SELECT * FROM psbts WHERE status LIKE 'broadcast%' AND status != 'final' AND txid IS NOT NULL",
+          [],
+          (err, rows) => {
+            if (err) reject(err);
+            else resolve(rows);
+          }
+        );
+      });
     }
   };
 
   // Descriptor operations for SQLite
   descriptorOperations = {
-    getAll: () => {
+    getAll: (sessionId = '0') => {
       return new Promise((resolve, reject) => {
-        db.all('SELECT * FROM descriptors ORDER BY created_at DESC', [], (err, rows) => {
+        db.all('SELECT * FROM descriptors WHERE session_id = ? ORDER BY created_at DESC', [sessionId], (err, rows) => {
           if (err) reject(err);
           else resolve(rows);
         });
@@ -394,11 +506,11 @@ if (usePostgres) {
       });
     },
 
-    create: (name, descriptor, mRequired, nTotal, firstAddress) => {
+    create: (name, descriptor, mRequired, nTotal, firstAddress, sessionId = '0') => {
       return new Promise((resolve, reject) => {
         db.run(
-          'INSERT INTO descriptors (name, descriptor, m_required, n_total, first_address) VALUES (?, ?, ?, ?, ?)',
-          [name, descriptor, mRequired, nTotal, firstAddress],
+          'INSERT INTO descriptors (name, descriptor, m_required, n_total, first_address, session_id) VALUES (?, ?, ?, ?, ?, ?)',
+          [name, descriptor, mRequired, nTotal, firstAddress, sessionId],
           function(err) {
             if (err) reject(err);
             else {

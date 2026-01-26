@@ -2,10 +2,16 @@ const express = require('express');
 const router = express.Router();
 const { descriptorOperations } = require('../database');
 
-// Get all descriptors
+// Helper to get session ID from request (header or query param, default to '0')
+function getSessionId(req) {
+  return req.headers['x-session-id'] || req.query.session || '0';
+}
+
+// Get all descriptors for a session
 router.get('/', async (req, res) => {
   try {
-    const descriptors = await descriptorOperations.getAll();
+    const sessionId = getSessionId(req);
+    const descriptors = await descriptorOperations.getAll(sessionId);
     res.json(descriptors);
   } catch (error) {
     console.error('Error fetching descriptors:', error);
@@ -31,6 +37,7 @@ router.get('/:id', async (req, res) => {
 router.post('/', async (req, res) => {
   try {
     const { name, descriptor, m_required, n_total, first_address } = req.body;
+    const sessionId = getSessionId(req);
     
     if (!name || !descriptor || !m_required || !n_total) {
       return res.status(400).json({ error: 'Missing required fields: name, descriptor, m_required, n_total' });
@@ -41,7 +48,8 @@ router.post('/', async (req, res) => {
       descriptor,
       m_required,
       n_total,
-      first_address || null
+      first_address || null,
+      sessionId
     );
     
     res.status(201).json(newDescriptor);

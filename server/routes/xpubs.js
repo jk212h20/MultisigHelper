@@ -10,10 +10,16 @@ function isValidXpub(xpub) {
   return xpubRegex.test(xpub);
 }
 
-// GET /api/xpubs - List all xpubs
+// Helper to get session ID from request (header or query param, default to '0')
+function getSessionId(req) {
+  return req.headers['x-session-id'] || req.query.session || '0';
+}
+
+// GET /api/xpubs - List all xpubs for a session
 router.get('/', async (req, res) => {
   try {
-    const xpubs = await xpubOperations.getAll();
+    const sessionId = getSessionId(req);
+    const xpubs = await xpubOperations.getAll(sessionId);
     res.json(xpubs);
   } catch (error) {
     console.error('Error fetching xpubs:', error);
@@ -39,6 +45,7 @@ router.get('/:id', async (req, res) => {
 router.post('/', async (req, res) => {
   try {
     const { label, xpub } = req.body;
+    const sessionId = getSessionId(req);
 
     // Validate input
     if (!label || !xpub) {
@@ -49,12 +56,12 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Invalid xpub format' });
     }
 
-    const newXpub = await xpubOperations.create(label.trim(), xpub.trim());
+    const newXpub = await xpubOperations.create(label.trim(), xpub.trim(), sessionId);
     res.status(201).json(newXpub);
   } catch (error) {
     console.error('Error creating xpub:', error);
     if (error.message && error.message.includes('UNIQUE constraint failed')) {
-      return res.status(409).json({ error: 'This xpub already exists' });
+      return res.status(409).json({ error: 'This xpub already exists in this session' });
     }
     res.status(500).json({ error: 'Failed to create xpub' });
   }

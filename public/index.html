@@ -7,6 +7,21 @@
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+    <!-- Session Bar - Discrete at top -->
+    <div class="session-bar" id="session-bar">
+        <div class="session-content">
+            <div class="session-indicator" id="session-indicator">
+                <span class="session-icon">🔓</span>
+                <span class="session-label" id="session-label">Public Session</span>
+            </div>
+            <div class="session-controls">
+                <input type="text" id="session-input" class="session-input" placeholder="Enter private session..." />
+                <button id="session-set-btn" class="btn btn-sm btn-secondary">Set</button>
+                <button id="session-clear-btn" class="btn btn-sm btn-secondary" style="display: none;">Clear</button>
+            </div>
+        </div>
+    </div>
+
     <div class="container">
         <header>
             <div class="header-title-wrapper">

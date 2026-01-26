@@ -2,10 +2,16 @@ const express = require('express');
 const router = express.Router();
 const { psbtOperations } = require('../database');
 
-// GET /api/psbts - List all PSBTs
+// Helper to get session ID from request (header or query param, default to '0')
+function getSessionId(req) {
+  return req.headers['x-session-id'] || req.query.session || '0';
+}
+
+// GET /api/psbts - List all PSBTs for a session
 router.get('/', async (req, res) => {
   try {
-    const psbts = await psbtOperations.getAll();
+    const sessionId = getSessionId(req);
+    const psbts = await psbtOperations.getAll(sessionId);
     res.json(psbts);
   } catch (error) {
     console.error('Error fetching PSBTs:', error);
@@ -31,6 +37,7 @@ router.get('/:id', async (req, res) => {
 router.post('/', async (req, res) => {
   try {
     const { name, psbt_data, m_required, n_total, signatures_count, notes } = req.body;
+    const sessionId = getSessionId(req);
 
     // Validate input
     if (!name || !psbt_data || !m_required || !n_total || signatures_count === undefined) {
@@ -47,7 +54,8 @@ router.post('/', async (req, res) => {
       m_required,
       n_total,
       signatures_count,
-      notes
+      notes,
+      sessionId
     );
     res.status(201).json(newPsbt);
   } catch (error) {
@@ -89,6 +97,41 @@ router.patch('/:id/notes', async (req, res) => {
   } catch (error) {
     console.error('Error updating PSBT notes:', error);
     res.status(500).json({ error: 'Failed to update PSBT notes' });
+  }
+});
+
+// PATCH /api/psbts/:id/broadcast - Update PSBT broadcast status
+router.patch('/:id/broadcast', async (req, res) => {
+  try {
+    const { txid, status, confirmations } = req.body;
+
+    if (!txid) {
+      return res.status(400).json({ error: 'Transaction ID is required' });
+    }
+
+    // Status should be one of: 'broadcast', 'confirmed_1' through 'confirmed_6', 'final'
+    const validStatuses = ['broadcast', 'confirmed_1', 'confirmed_2', 'confirmed_3', 
+                          'confirmed_4', 'confirmed_5', 'confirmed_6', 'final'];
+    const newStatus = status || 'broadcast';
+    
+    if (!validStatuses.includes(newStatus)) {
+      return res.status(400).json({ error: 'Invalid status' });
+    }
+
+    const updatedPsbt = await psbtOperations.updateBroadcastStatus(
+      req.params.id, 
+      txid, 
+      newStatus, 
+      confirmations || 0
+    );
+    
+    if (!updatedPsbt) {
+      return res.status(404).json({ error: 'PSBT not found' });
+    }
+    res.json(updatedPsbt);
+  } catch (error) {
+    console.error('Error updating PSBT broadcast status:', error);
+    res.status(500).json({ error: 'Failed to update PSBT broadcast status' });
   }
 });
 

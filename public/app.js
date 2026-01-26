@@ -1,6 +1,69 @@
 // API Base URL
 const API_BASE = window.location.origin;
 
+// Session Management
+let currentSessionId = localStorage.getItem('multisig_session') || '0';
+
+// Get session ID for API calls
+function getSessionId() {
+    return currentSessionId;
+}
+
+// Set session ID
+function setSessionId(sessionId) {
+    currentSessionId = sessionId || '0';
+    localStorage.setItem('multisig_session', currentSessionId);
+    updateSessionUI();
+    // Reload all data with new session
+    reloadAllData();
+}
+
+// Update session UI
+function updateSessionUI() {
+    const sessionBar = document.getElementById('session-bar');
+    const sessionLabel = document.getElementById('session-label');
+    const sessionIcon = document.querySelector('.session-icon');
+    const sessionInput = document.getElementById('session-input');
+    const setBtn = document.getElementById('session-set-btn');
+    const clearBtn = document.getElementById('session-clear-btn');
+    
+    if (currentSessionId === '0') {
+        sessionBar.classList.remove('private');
+        sessionIcon.textContent = '🔓';
+        sessionLabel.textContent = 'Public Session';
+        sessionInput.value = '';
+        setBtn.style.display = 'inline-block';
+        clearBtn.style.display = 'none';
+    } else {
+        sessionBar.classList.add('private');
+        sessionIcon.textContent = '🔒';
+        sessionLabel.textContent = `Private: ${currentSessionId}`;
+        sessionInput.value = currentSessionId;
+        setBtn.style.display = 'none';
+        clearBtn.style.display = 'inline-block';
+    }
+}
+
+// Reload all data (after session change)
+async function reloadAllData() {
+    // Clear selection state
+    selectedXpubIds.clear();
+    await loadXpubs();
+    await loadPsbts();
+    await loadDescriptors();
+}
+
+// Helper function to add session header to fetch options
+function withSession(options = {}) {
+    return {
+        ...options,
+        headers: {
+            ...options.headers,
+            'X-Session-Id': getSessionId()
+        }
+    };
+}
+
 // Bitcoin library reference
 let bitcoin, BIP32;
 let librariesInitialized = false;
@@ -142,6 +205,44 @@ function setupEventListeners() {
         
         mValueInput.value = m;
     });
+    
+    // Session controls
+    const sessionInput = document.getElementById('session-input');
+    const sessionSetBtn = document.getElementById('session-set-btn');
+    const sessionClearBtn = document.getElementById('session-clear-btn');
+    
+    if (sessionSetBtn) {
+        sessionSetBtn.addEventListener('click', () => {
+            const newSession = sessionInput.value.trim();
+            if (newSession) {
+                setSessionId(newSession);
+                showToast('Session Changed', `Now using private session: ${newSession}`, 'success');
+            }
+        });
+    }
+    
+    if (sessionClearBtn) {
+        sessionClearBtn.addEventListener('click', () => {
+            setSessionId('0');
+            showToast('Session Cleared', 'Switched to public session', 'info');
+        });
+    }
+    
+    // Allow Enter key to set session
+    if (sessionInput) {
+        sessionInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                const newSession = sessionInput.value.trim();
+                if (newSession) {
+                    setSessionId(newSession);
+                    showToast('Session Changed', `Now using private session: ${newSession}`, 'success');
+                }
+            }
+        });
+    }
+    
+    // Initialize session UI on load
+    updateSessionUI();
 }
 
 // Handle .psbt file upload
@@ -196,7 +297,7 @@ function handlePsbtFileUpload(event) {
 async function loadXpubs() {
     console.log('Loading xpubs from:', `${API_BASE}/api/xpubs`);
     try {
-        const response = await fetch(`${API_BASE}/api/xpubs`);
+        const response = await fetch(`${API_BASE}/api/xpubs`, withSession());
         console.log('Response status:', response.status);
         
         if (!response.ok) {
@@ -331,11 +432,11 @@ async function addXpub() {
     }
 
     try {
-        const response = await fetch(`${API_BASE}/api/xpubs`, {
+        const response = await fetch(`${API_BASE}/api/xpubs`, withSession({
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ label, xpub })
-        });
+        }));
 
         if (!response.ok) {
             const error = await response.json();
@@ -896,11 +997,14 @@ function matchPubkeyToXpub(targetPubkey) {
 // PSBT Collaboration Functions
 async function loadPsbts() {
     try {
-        const response = await fetch(`${API_BASE}/api/psbts`);
+        const response = await fetch(`${API_BASE}/api/psbts`, withSession());
         if (!response.ok) throw new Error('Failed to load PSBTs');
         
         allPsbts = await response.json();
         displayPsbts();
+        
+        // Initialize confirmation tracking for any broadcast PSBTs
+        initializeConfirmationTracking();
     } catch (error) {
         psbtListDiv.innerHTML = `<p class="error-message">Error loading PSBTs: ${error.message}</p>`;
     }
@@ -1017,9 +1121,7 @@ function displayPsbts() {
                         <span class="psbt-sig-badge ${isReady ? 'complete' : 'pending'}">
                             ${psbt.signatures_count}/${psbt.m_required} ✍️
                         </span>
-                        <span class="psbt-status ${psbt.status}">
-                            ${isReady ? '✅ Ready' : '⏳ Pending'}
-                        </span>
+                        ${getBroadcastStatusBadge(psbt)}
                     </div>
                 </div>
                 
@@ -1037,6 +1139,11 @@ function displayPsbts() {
                     ${psbt.notes ? `<div class="psbt-notes">${escapeHtml(psbt.notes)}</div>` : ''}
                     
                     <div class="psbt-actions">
+                        ${isReady ? `
+                        <button class="btn btn-success broadcast-btn" onclick="event.stopPropagation(); broadcastTransaction(${psbt.id})">
+                            📡 Broadcast
+                        </button>
+                        ` : ''}
                         <button class="btn btn-info" onclick="event.stopPropagation(); downloadPsbt(${psbt.id})">📥 Download</button>
                         <button class="btn btn-info" onclick="event.stopPropagation(); togglePsbtQR(${psbt.id}, '${escapeHtml(psbt.psbt_data)}')">📱 QR Code</button>
                         <button class="btn btn-secondary" onclick="event.stopPropagation(); viewPsbtDetails(${psbt.id})">👁️ Details</button>
@@ -1181,7 +1288,7 @@ async function uploadPsbt() {
         }
 
         // Upload as new PSBT
-        const response = await fetch(`${API_BASE}/api/psbts`, {
+        const response = await fetch(`${API_BASE}/api/psbts`, withSession({
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -1192,7 +1299,7 @@ async function uploadPsbt() {
                 signatures_count: signaturesCount,
                 notes: null
             })
-        });
+        }));
 
         if (!response.ok) {
             const error = await response.json();
@@ -1985,7 +2092,7 @@ function showToast(title, message, type = 'info') {
 // Load saved descriptors from server
 async function loadDescriptors() {
     try {
-        const response = await fetch(`${API_BASE}/api/descriptors`);
+        const response = await fetch(`${API_BASE}/api/descriptors`, withSession());
         if (!response.ok) throw new Error('Failed to load descriptors');
         
         allDescriptors = await response.json();
@@ -2011,7 +2118,7 @@ async function saveDescriptorToServer() {
     const name = `${m}-of-${n} Multisig Wallet`;
     
     try {
-        const response = await fetch(`${API_BASE}/api/descriptors`, {
+        const response = await fetch(`${API_BASE}/api/descriptors`, withSession({
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -2021,7 +2128,7 @@ async function saveDescriptorToServer() {
                 n_total: n,
                 first_address: firstAddress
             })
-        });
+        }));
         
         if (!response.ok) {
             const error = await response.json();
@@ -2155,6 +2262,754 @@ function updateAutoLabelPlaceholder() {
     }
 }
 
+// ==================== BROADCAST FUNCTIONALITY ====================
+
+// Broadcast endpoints configuration
+const BROADCAST_ENDPOINTS = [
+    {
+        name: 'Blockstream',
+        url: 'https://blockstream.info/api/tx',
+        method: 'POST',
+        contentType: 'text/plain',
+        formatBody: (hex) => hex,
+        parseResponse: (text) => text.trim(), // Returns txid
+        explorerUrl: (txid) => `https://blockstream.info/tx/${txid}`
+    },
+    {
+        name: 'Mempool.space',
+        url: 'https://mempool.space/api/tx',
+        method: 'POST',
+        contentType: 'text/plain',
+        formatBody: (hex) => hex,
+        parseResponse: (text) => text.trim(), // Returns txid
+        explorerUrl: (txid) => `https://mempool.space/tx/${txid}`
+    }
+];
+
+// Verification endpoints (we check these AFTER broadcasting to confirm propagation)
+const VERIFY_ENDPOINTS = [
+    {
+        name: 'Blockstream',
+        checkUrl: (txid) => `https://blockstream.info/api/tx/${txid}`,
+        parseExists: (response) => response.ok
+    },
+    {
+        name: 'Mempool.space',
+        checkUrl: (txid) => `https://mempool.space/api/tx/${txid}`,
+        parseExists: (response) => response.ok
+    },
+    {
+        name: 'Blockchain.info',
+        checkUrl: (txid) => `https://blockchain.info/rawtx/${txid}?cors=true`,
+        parseExists: (response) => response.ok
+    }
+];
+
+// Finalize a PSBT and extract the raw transaction hex
+function finalizePsbt(psbtData) {
+    try {
+        const psbt = bitcoin.Psbt.fromBase64(psbtData);
+        
+        // Check if already finalized
+        let needsFinalize = false;
+        for (const input of psbt.data.inputs) {
+            if (!input.finalScriptSig && !input.finalScriptWitness) {
+                needsFinalize = true;
+                break;
+            }
+        }
+        
+        if (needsFinalize) {
+            psbt.finalizeAllInputs();
+        }
+        
+        const tx = psbt.extractTransaction();
+        return {
+            success: true,
+            hex: tx.toHex(),
+            txid: tx.getId()
+        };
+    } catch (error) {
+        return {
+            success: false,
+            error: error.message
+        };
+    }
+}
+
+// Broadcast transaction to a single endpoint
+async function broadcastToEndpoint(endpoint, txHex) {
+    try {
+        const response = await fetch(endpoint.url, {
+            method: endpoint.method,
+            headers: {
+                'Content-Type': endpoint.contentType
+            },
+            body: endpoint.formatBody(txHex)
+        });
+        
+        if (response.ok) {
+            const text = await response.text();
+            const txid = endpoint.parseResponse(text);
+            return {
+                success: true,
+                endpoint: endpoint.name,
+                txid: txid,
+                explorerUrl: endpoint.explorerUrl(txid)
+            };
+        } else {
+            const errorText = await response.text();
+            return {
+                success: false,
+                endpoint: endpoint.name,
+                error: errorText || `HTTP ${response.status}`
+            };
+        }
+    } catch (error) {
+        return {
+            success: false,
+            endpoint: endpoint.name,
+            error: error.message
+        };
+    }
+}
+
+// Verify transaction exists on an endpoint (to confirm propagation)
+async function verifyOnEndpoint(verifyEndpoint, txid, broadcastedTo) {
+    // Skip if we directly broadcast to this endpoint
+    if (broadcastedTo.includes(verifyEndpoint.name)) {
+        return {
+            endpoint: verifyEndpoint.name,
+            status: 'skipped',
+            reason: 'Direct broadcast target'
+        };
+    }
+    
+    try {
+        const response = await fetch(verifyEndpoint.checkUrl(txid), {
+            method: 'GET'
+        });
+        
+        const exists = verifyEndpoint.parseExists(response);
+        return {
+            endpoint: verifyEndpoint.name,
+            status: exists ? 'confirmed' : 'not_found',
+            independent: true // This is an independent verification
+        };
+    } catch (error) {
+        return {
+            endpoint: verifyEndpoint.name,
+            status: 'error',
+            error: error.message
+        };
+    }
+}
+
+// Main broadcast function with verification
+async function broadcastTransaction(psbtId) {
+    const psbtData = allPsbts.find(p => p.id === psbtId);
+    if (!psbtData) {
+        showToast('Error', 'PSBT not found', 'error');
+        return;
+    }
+    
+    // Show broadcast modal
+    const modal = showBroadcastModal(psbtData);
+    const statusContainer = modal.querySelector('#broadcast-status');
+    const resultContainer = modal.querySelector('#broadcast-result');
+    
+    // Step 1: Finalize PSBT
+    updateBroadcastStatus(statusContainer, 'finalize', 'pending', 'Finalizing PSBT...');
+    
+    const finalizeResult = finalizePsbt(psbtData.psbt_data);
+    if (!finalizeResult.success) {
+        updateBroadcastStatus(statusContainer, 'finalize', 'error', `Failed: ${finalizeResult.error}`);
+        return;
+    }
+    
+    updateBroadcastStatus(statusContainer, 'finalize', 'success', `Finalized! TxID: ${finalizeResult.txid.substring(0, 16)}...`);
+    
+    const txHex = finalizeResult.hex;
+    const txid = finalizeResult.txid;
+    
+    // Step 2: Broadcast to all endpoints in parallel
+    updateBroadcastStatus(statusContainer, 'broadcast', 'pending', 'Broadcasting to network...');
+    
+    const broadcastPromises = BROADCAST_ENDPOINTS.map(endpoint => 
+        broadcastToEndpoint(endpoint, txHex)
+    );
+    
+    const broadcastResults = await Promise.all(broadcastPromises);
+    
+    // Track which endpoints accepted the broadcast
+    const successfulBroadcasts = broadcastResults.filter(r => r.success);
+    const failedBroadcasts = broadcastResults.filter(r => !r.success);
+    
+    // Update broadcast status for each endpoint
+    broadcastResults.forEach(result => {
+        const statusClass = result.success ? 'success' : 'error';
+        const icon = result.success ? '✅' : '❌';
+        const message = result.success 
+            ? `Accepted` 
+            : `Failed: ${result.error.substring(0, 50)}`;
+        
+        addEndpointStatus(statusContainer, 'broadcast', result.endpoint, statusClass, `${icon} ${message}`);
+    });
+    
+    if (successfulBroadcasts.length === 0) {
+        updateBroadcastStatus(statusContainer, 'broadcast', 'error', 'All broadcasts failed!');
+        showBroadcastResult(resultContainer, false, 'Transaction broadcast failed. Please try again later.');
+        return;
+    }
+    
+    updateBroadcastStatus(statusContainer, 'broadcast', 'success', 
+        `Sent to ${successfulBroadcasts.length}/${BROADCAST_ENDPOINTS.length} endpoints`);
+    
+    // Step 3: Wait and verify propagation on INDEPENDENT endpoints
+    updateBroadcastStatus(statusContainer, 'verify', 'pending', 'Verifying network propagation...');
+    
+    // Wait a few seconds for propagation
+    await new Promise(resolve => setTimeout(resolve, 3000));
+    
+    const broadcastedToNames = successfulBroadcasts.map(r => r.endpoint);
+    const verifyPromises = VERIFY_ENDPOINTS.map(endpoint =>
+        verifyOnEndpoint(endpoint, txid, broadcastedToNames)
+    );
+    
+    const verifyResults = await Promise.all(verifyPromises);
+    
+    // Check for independent confirmations
+    const independentConfirmations = verifyResults.filter(r => 
+        r.status === 'confirmed' && r.independent
+    );
+    
+    // Update verify status for each endpoint
+    verifyResults.forEach(result => {
+        if (result.status === 'skipped') return; // Don't show skipped endpoints
+        
+        const statusClass = result.status === 'confirmed' ? 'success' : 'warning';
+        const icon = result.status === 'confirmed' ? '🌐' : '⏳';
+        const message = result.status === 'confirmed' 
+            ? 'Confirmed on network!' 
+            : 'Not seen yet';
+        
+        addEndpointStatus(statusContainer, 'verify', result.endpoint, statusClass, `${icon} ${message}`);
+    });
+    
+    // Final result
+    if (independentConfirmations.length > 0) {
+        updateBroadcastStatus(statusContainer, 'verify', 'success', 
+            `✨ Independently confirmed on ${independentConfirmations.length} service(s)!`);
+        showBroadcastResult(resultContainer, true, txid, successfulBroadcasts[0].explorerUrl);
+        
+        // Update PSBT status in database
+        await updatePsbtBroadcastStatus(psbtId, txid);
+    } else if (successfulBroadcasts.length > 0) {
+        updateBroadcastStatus(statusContainer, 'verify', 'warning', 
+            'Broadcast accepted, waiting for network propagation...');
+        showBroadcastResult(resultContainer, true, txid, successfulBroadcasts[0].explorerUrl, true);
+        
+        // Still update status - it was accepted
+        await updatePsbtBroadcastStatus(psbtId, txid);
+    }
+}
+
+// Update PSBT status after broadcast
+async function updatePsbtBroadcastStatus(psbtId, txid) {
+    try {
+        await fetch(`${API_BASE}/api/psbts/${psbtId}/broadcast`, withSession({
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                txid: txid,
+                status: 'broadcast',
+                confirmations: 0
+            })
+        }));
+        await loadPsbts();
+        
+        // Start confirmation tracking for this transaction
+        startConfirmationTracking(psbtId, txid);
+    } catch (error) {
+        console.error('Failed to update PSBT status:', error);
+    }
+}
+
+// ==================== CONFIRMATION TRACKING ====================
+
+// Store active polling timers
+const confirmationPollers = new Map();
+
+// Check transaction confirmations from blockchain API
+async function checkConfirmations(txid) {
+    try {
+        // Try Blockstream API first
+        const response = await fetch(`https://blockstream.info/api/tx/${txid}`);
+        if (response.ok) {
+            const txData = await response.json();
+            
+            // If tx has block_height, it's confirmed - need to get current block height
+            if (txData.status && txData.status.confirmed) {
+                const blockHeightResponse = await fetch('https://blockstream.info/api/blocks/tip/height');
+                if (blockHeightResponse.ok) {
+                    const currentHeight = await blockHeightResponse.text();
+                    const confirmations = parseInt(currentHeight) - txData.status.block_height + 1;
+                    return { confirmations: Math.max(0, confirmations), confirmed: true };
+                }
+            }
+            return { confirmations: 0, confirmed: false };
+        }
+        
+        // Fallback to mempool.space
+        const mempoolResponse = await fetch(`https://mempool.space/api/tx/${txid}`);
+        if (mempoolResponse.ok) {
+            const txData = await mempoolResponse.json();
+            if (txData.status && txData.status.confirmed) {
+                const blockHeightResponse = await fetch('https://mempool.space/api/blocks/tip/height');
+                if (blockHeightResponse.ok) {
+                    const currentHeight = await blockHeightResponse.text();
+                    const confirmations = parseInt(currentHeight) - txData.status.block_height + 1;
+                    return { confirmations: Math.max(0, confirmations), confirmed: true };
+                }
+            }
+            return { confirmations: 0, confirmed: false };
+        }
+        
+        return null; // Couldn't check
+    } catch (error) {
+        console.error('Error checking confirmations:', error);
+        return null;
+    }
+}
+
+// Start tracking confirmations for a transaction
+function startConfirmationTracking(psbtId, txid) {
+    // Clear any existing poller for this PSBT
+    if (confirmationPollers.has(psbtId)) {
+        clearTimeout(confirmationPollers.get(psbtId));
+    }
+    
+    // Start the polling
+    pollConfirmations(psbtId, txid, 0);
+}
+
+// Poll for confirmations
+async function pollConfirmations(psbtId, txid, currentConfirmations) {
+    const result = await checkConfirmations(txid);
+    
+    if (result !== null) {
+        const newConfirmations = result.confirmations;
+        
+        // Update if confirmations changed
+        if (newConfirmations !== currentConfirmations) {
+            let newStatus;
+            if (newConfirmations === 0) {
+                newStatus = 'broadcast';
+            } else if (newConfirmations >= 6) {
+                newStatus = 'final';
+            } else {
+                newStatus = `confirmed_${newConfirmations}`;
+            }
+            
+            // Update on server
+            try {
+                await fetch(`${API_BASE}/api/psbts/${psbtId}/broadcast`, withSession({
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        txid: txid,
+                        status: newStatus,
+                        confirmations: newConfirmations
+                    })
+                }));
+                
+                // Reload PSBTs to update UI
+                await loadPsbts();
+                
+                // Show notification on milestones
+                if (newConfirmations === 1) {
+                    showToast('First Confirmation! 🎉', `Transaction ${txid.substring(0, 8)}... has 1 confirmation`, 'success');
+                } else if (newConfirmations === 6) {
+                    showToast('Transaction Final! ✅', `Transaction ${txid.substring(0, 8)}... has 6+ confirmations`, 'success');
+                }
+            } catch (error) {
+                console.error('Error updating confirmation status:', error);
+            }
+        }
+        
+        // If we've reached 6+ confirmations, stop polling
+        if (newConfirmations >= 6) {
+            confirmationPollers.delete(psbtId);
+            return;
+        }
+        
+        // Schedule next poll
+        // Unconfirmed: check every 5 seconds
+        // 1-5 confirmations: check every 20 seconds
+        const pollInterval = newConfirmations === 0 ? 5000 : 20000;
+        
+        const timerId = setTimeout(() => {
+            pollConfirmations(psbtId, txid, newConfirmations);
+        }, pollInterval);
+        
+        confirmationPollers.set(psbtId, timerId);
+    } else {
+        // If check failed, retry in 10 seconds
+        const timerId = setTimeout(() => {
+            pollConfirmations(psbtId, txid, currentConfirmations);
+        }, 10000);
+        
+        confirmationPollers.set(psbtId, timerId);
+    }
+}
+
+// Initialize confirmation tracking for any broadcast PSBTs on page load
+function initializeConfirmationTracking() {
+    allPsbts.forEach(psbt => {
+        // Track any broadcast transaction that isn't final
+        if (psbt.txid && psbt.status && 
+            (psbt.status === 'broadcast' || psbt.status.startsWith('confirmed_')) && 
+            psbt.status !== 'final') {
+            startConfirmationTracking(psbt.id, psbt.txid);
+        }
+    });
+}
+
+// Show broadcast confirmation modal
+function showBroadcastModal(psbtData) {
+    // Parse PSBT to show summary
+    let summary = { inputs: 0, outputs: 0, totalOutput: 0, fee: 0 };
+    try {
+        const psbt = bitcoin.Psbt.fromBase64(psbtData.psbt_data);
+        const details = parsePsbtDetails(psbt);
+        summary = {
+            inputs: details.inputs.length,
+            outputs: details.outputs.length,
+            totalOutput: details.totalOutput,
+            fee: details.fee
+        };
+    } catch (e) {
+        console.error('Failed to parse PSBT for summary:', e);
+    }
+    
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.id = 'broadcast-modal';
+    overlay.innerHTML = `
+        <div class="modal-content broadcast-modal">
+            <h3>📡 Broadcast Transaction</h3>
+            
+            <div class="broadcast-summary">
+                <h4>Transaction Summary</h4>
+                <div class="summary-grid">
+                    <div class="summary-item">
+                        <span class="summary-label">Name:</span>
+                        <span class="summary-value">${escapeHtml(psbtData.name)}</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Inputs:</span>
+                        <span class="summary-value">${summary.inputs}</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Outputs:</span>
+                        <span class="summary-value">${summary.outputs}</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Amount:</span>
+                        <span class="summary-value">${formatSatoshis(summary.totalOutput)}</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Fee:</span>
+                        <span class="summary-value">${formatSatoshis(summary.fee)}</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="broadcast-status-container" id="broadcast-status">
+                <div class="status-step" data-step="finalize">
+                    <span class="status-icon">⏳</span>
+                    <span class="status-text">Waiting to start...</span>
+                </div>
+            </div>
+            
+            <div class="broadcast-result" id="broadcast-result" style="display: none;"></div>
+            
+            <div class="broadcast-warning">
+                ⚠️ <strong>Warning:</strong> Broadcasting is irreversible! Make sure you've verified the transaction details.
+            </div>
+            
+            <div class="modal-buttons">
+                <button class="btn btn-secondary" id="broadcast-cancel">Cancel</button>
+                <button class="btn btn-success" id="broadcast-confirm">📡 Broadcast Now</button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(overlay);
+    
+    const cancelBtn = overlay.querySelector('#broadcast-cancel');
+    const confirmBtn = overlay.querySelector('#broadcast-confirm');
+    
+    cancelBtn.addEventListener('click', () => {
+        document.body.removeChild(overlay);
+    });
+    
+    confirmBtn.addEventListener('click', async () => {
+        confirmBtn.disabled = true;
+        confirmBtn.textContent = 'Broadcasting...';
+        cancelBtn.style.display = 'none';
+        
+        // Remove the warning during broadcast
+        overlay.querySelector('.broadcast-warning').style.display = 'none';
+        
+        // The actual broadcast will update the status container
+        await executeBroadcast(psbtData, overlay);
+    });
+    
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay && !confirmBtn.disabled) {
+            document.body.removeChild(overlay);
+        }
+    });
+    
+    return overlay;
+}
+
+// Execute the broadcast (called after confirmation)
+async function executeBroadcast(psbtData, modal) {
+    const statusContainer = modal.querySelector('#broadcast-status');
+    const resultContainer = modal.querySelector('#broadcast-result');
+    
+    // Step 1: Finalize PSBT
+    updateBroadcastStatus(statusContainer, 'finalize', 'pending', 'Finalizing PSBT...');
+    
+    await new Promise(resolve => setTimeout(resolve, 500)); // Brief delay for UX
+    
+    const finalizeResult = finalizePsbt(psbtData.psbt_data);
+    if (!finalizeResult.success) {
+        updateBroadcastStatus(statusContainer, 'finalize', 'error', `Failed: ${finalizeResult.error}`);
+        showBroadcastResult(resultContainer, false, `Finalization failed: ${finalizeResult.error}`);
+        return;
+    }
+    
+    updateBroadcastStatus(statusContainer, 'finalize', 'success', 
+        `Finalized! TxID: ${finalizeResult.txid.substring(0, 12)}...`);
+    
+    const txHex = finalizeResult.hex;
+    const txid = finalizeResult.txid;
+    
+    // Step 2: Broadcast to all endpoints
+    addStatusStep(statusContainer, 'broadcast', 'pending', 'Broadcasting to network...');
+    
+    const broadcastPromises = BROADCAST_ENDPOINTS.map(endpoint => 
+        broadcastToEndpoint(endpoint, txHex)
+    );
+    
+    const broadcastResults = await Promise.all(broadcastPromises);
+    
+    const successfulBroadcasts = broadcastResults.filter(r => r.success);
+    const failedBroadcasts = broadcastResults.filter(r => !r.success);
+    
+    // Show individual endpoint results
+    broadcastResults.forEach(result => {
+        const icon = result.success ? '✅' : '❌';
+        const message = result.success 
+            ? 'Accepted' 
+            : `Failed: ${result.error.substring(0, 40)}...`;
+        addEndpointStatus(statusContainer, result.endpoint, result.success ? 'success' : 'error', 
+            `${icon} ${result.endpoint}: ${message}`);
+    });
+    
+    if (successfulBroadcasts.length === 0) {
+        updateBroadcastStatus(statusContainer, 'broadcast', 'error', 'All broadcasts failed!');
+        showBroadcastResult(resultContainer, false, 'Transaction rejected by all endpoints. The transaction may be invalid.');
+        return;
+    }
+    
+    updateBroadcastStatus(statusContainer, 'broadcast', 'success', 
+        `Accepted by ${successfulBroadcasts.length}/${BROADCAST_ENDPOINTS.length} endpoints`);
+    
+    // Step 3: Verify propagation
+    addStatusStep(statusContainer, 'verify', 'pending', 'Verifying network propagation (3s)...');
+    
+    await new Promise(resolve => setTimeout(resolve, 3000));
+    
+    const broadcastedToNames = successfulBroadcasts.map(r => r.endpoint);
+    const verifyPromises = VERIFY_ENDPOINTS.map(endpoint =>
+        verifyOnEndpoint(endpoint, txid, broadcastedToNames)
+    );
+    
+    const verifyResults = await Promise.all(verifyPromises);
+    
+    const independentConfirmations = verifyResults.filter(r => 
+        r.status === 'confirmed' && r.independent
+    );
+    
+    // Show verification results
+    verifyResults.forEach(result => {
+        if (result.status === 'skipped') return;
+        
+        const icon = result.status === 'confirmed' ? '🌐' : '⏳';
+        const statusText = result.status === 'confirmed' 
+            ? 'Seen on network!' 
+            : 'Not propagated yet';
+        addEndpointStatus(statusContainer, result.endpoint, 
+            result.status === 'confirmed' ? 'success' : 'warning',
+            `${icon} ${result.endpoint}: ${statusText}`);
+    });
+    
+    // Final result
+    if (independentConfirmations.length > 0) {
+        updateBroadcastStatus(statusContainer, 'verify', 'success', 
+            `✨ Confirmed on ${independentConfirmations.length} independent service(s)!`);
+        showBroadcastResult(resultContainer, true, txid, successfulBroadcasts[0].explorerUrl);
+        
+        await updatePsbtBroadcastStatus(psbtData.id, txid);
+        showToast('Broadcast Success! 🎉', 'Transaction confirmed on the network', 'success');
+    } else {
+        updateBroadcastStatus(statusContainer, 'verify', 'warning', 
+            'Accepted but not yet seen on independent services');
+        showBroadcastResult(resultContainer, true, txid, successfulBroadcasts[0].explorerUrl, true);
+        
+        await updatePsbtBroadcastStatus(psbtData.id, txid);
+        showToast('Broadcast Sent', 'Transaction accepted, propagating...', 'info');
+    }
+}
+
+// Helper: Update a status step
+function updateBroadcastStatus(container, step, status, message) {
+    let stepEl = container.querySelector(`[data-step="${step}"]`);
+    if (!stepEl) {
+        stepEl = document.createElement('div');
+        stepEl.className = 'status-step';
+        stepEl.dataset.step = step;
+        container.appendChild(stepEl);
+    }
+    
+    const icons = {
+        pending: '⏳',
+        success: '✅',
+        error: '❌',
+        warning: '⚠️'
+    };
+    
+    stepEl.className = `status-step ${status}`;
+    stepEl.innerHTML = `
+        <span class="status-icon">${icons[status] || '•'}</span>
+        <span class="status-text">${message}</span>
+    `;
+}
+
+// Helper: Add a new status step
+function addStatusStep(container, step, status, message) {
+    const stepEl = document.createElement('div');
+    stepEl.className = `status-step ${status}`;
+    stepEl.dataset.step = step;
+    
+    const icons = {
+        pending: '⏳',
+        success: '✅',
+        error: '❌',
+        warning: '⚠️'
+    };
+    
+    stepEl.innerHTML = `
+        <span class="status-icon">${icons[status] || '•'}</span>
+        <span class="status-text">${message}</span>
+    `;
+    container.appendChild(stepEl);
+}
+
+// Helper: Add endpoint-specific status
+function addEndpointStatus(container, endpoint, status, message) {
+    const endpointEl = document.createElement('div');
+    endpointEl.className = `endpoint-status ${status}`;
+    endpointEl.innerHTML = `<span class="endpoint-message">${message}</span>`;
+    container.appendChild(endpointEl);
+}
+
+// Helper: Show final broadcast result
+function showBroadcastResult(container, success, txidOrError, explorerUrl = null, pending = false) {
+    container.style.display = 'block';
+    
+    if (success) {
+        container.className = 'broadcast-result success';
+        container.innerHTML = `
+            <div class="result-header">
+                ${pending ? '⏳' : '🎉'} ${pending ? 'Transaction Sent!' : 'Transaction Broadcast Successfully!'}
+            </div>
+            <div class="result-txid">
+                <label>Transaction ID:</label>
+                <code>${txidOrError}</code>
+                <button class="btn btn-sm btn-secondary" onclick="copyToClipboard('${txidOrError}', 'TxID')">📋</button>
+            </div>
+            ${explorerUrl ? `
+            <div class="result-explorer">
+                <a href="${explorerUrl}" target="_blank" class="btn btn-primary">
+                    🔍 View on Block Explorer
+                </a>
+            </div>
+            ` : ''}
+            ${pending ? `
+            <div class="result-note">
+                Transaction was accepted but not yet confirmed on independent services. 
+                This is normal - check the explorer in a few minutes.
+            </div>
+            ` : ''}
+            <button class="btn btn-secondary" onclick="closeBroadcastModal()" style="margin-top: 15px;">Close</button>
+        `;
+    } else {
+        container.className = 'broadcast-result error';
+        container.innerHTML = `
+            <div class="result-header">❌ Broadcast Failed</div>
+            <div class="result-error">${escapeHtml(txidOrError)}</div>
+            <button class="btn btn-secondary" onclick="closeBroadcastModal()" style="margin-top: 15px;">Close</button>
+        `;
+    }
+}
+
+// Close broadcast modal
+function closeBroadcastModal() {
+    const modal = document.getElementById('broadcast-modal');
+    if (modal) {
+        document.body.removeChild(modal);
+    }
+}
+
+// Get broadcast status badge HTML based on PSBT status
+function getBroadcastStatusBadge(psbt) {
+    const status = psbt.status;
+    const confirmations = psbt.confirmations || 0;
+    const isReady = status === 'ready';
+    
+    // Status mapping
+    if (status === 'broadcast') {
+        return `<span class="psbt-status broadcast">📡 Broadcast (Unconfirmed)</span>`;
+    } else if (status && status.startsWith('confirmed_')) {
+        const confs = parseInt(status.split('_')[1]) || confirmations;
+        return `<span class="psbt-status confirming">🟡 ${confs}/6 Confirmations</span>`;
+    } else if (status === 'final') {
+        return `<span class="psbt-status final">✅ Final (6+ confs)</span>`;
+    } else if (isReady) {
+        return `<span class="psbt-status ready">✅ Ready</span>`;
+    } else {
+        return `<span class="psbt-status pending">⏳ Pending</span>`;
+    }
+}
+
+// Check if PSBT is ready for broadcast (has all required signatures)
+function isPsbtReadyForBroadcast(psbtData) {
+    if (!bitcoin) return false;
+    
+    try {
+        const psbt = bitcoin.Psbt.fromBase64(psbtData);
+        const sigInfo = getSignatureInfo(psbt);
+        return sigInfo.isComplete;
+    } catch (e) {
+        return false;
+    }
+}
+
 // Export functions to global scope for onclick handlers
 // (Required because app.js is loaded as a module)
 window.editXpub = editXpub;
@@ -2175,3 +3030,5 @@ window.saveDescriptorToServer = saveDescriptorToServer;
 window.copyDescriptorById = copyDescriptorById;
 window.downloadDescriptorById = downloadDescriptorById;
 window.deleteDescriptor = deleteDescriptor;
+window.broadcastTransaction = broadcastTransaction;
+window.closeBroadcastModal = closeBroadcastModal;
