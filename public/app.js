@@ -1139,10 +1139,15 @@ function displayPsbts() {
                     ${psbt.notes ? `<div class="psbt-notes">${escapeHtml(psbt.notes)}</div>` : ''}
                     
                     <div class="psbt-actions">
-                        ${isReady ? `
+                        ${isReady && !psbt.txid ? `
                         <button class="btn btn-success broadcast-btn" onclick="event.stopPropagation(); broadcastTransaction(${psbt.id})">
                             📡 Broadcast
                         </button>
+                        ` : ''}
+                        ${psbt.txid ? `
+                        <a href="https://mempool.space/tx/${psbt.txid}" target="_blank" class="btn btn-secondary">
+                            🔍 View TX
+                        </a>
                         ` : ''}
                         <button class="btn btn-info" onclick="event.stopPropagation(); downloadPsbt(${psbt.id})">📥 Download</button>
                         <button class="btn btn-info" onclick="event.stopPropagation(); togglePsbtQR(${psbt.id}, '${escapeHtml(psbt.psbt_data)}')">📱 QR Code</button>
@@ -2821,6 +2826,39 @@ async function executeBroadcast(psbtData, modal) {
     });
     
     if (successfulBroadcasts.length === 0) {
+        // Check if the error indicates the transaction is already in the blockchain
+        const alreadyBroadcastErrors = ['already in block chain', 'Transaction already in block chain', 
+            'txn-already-in-mempool', 'txn-mempool-conflict', 'already exists', 'already known'];
+        
+        const isAlreadyBroadcast = failedBroadcasts.some(r => 
+            alreadyBroadcastErrors.some(errText => r.error.toLowerCase().includes(errText.toLowerCase()))
+        );
+        
+        if (isAlreadyBroadcast) {
+            updateBroadcastStatus(statusContainer, 'broadcast', 'warning', 'Transaction already broadcast!');
+            addStatusStep(statusContainer, 'verify', 'pending', 'Checking transaction status...');
+            
+            // Check if the transaction exists on chain
+            const result = await checkConfirmations(txid);
+            if (result !== null) {
+                const confs = result.confirmations;
+                let newStatus = confs === 0 ? 'broadcast' : (confs >= 6 ? 'final' : `confirmed_${confs}`);
+                
+                updateBroadcastStatus(statusContainer, 'verify', 'success', 
+                    confs === 0 ? 'Found in mempool!' : `Found on chain with ${confs} confirmation(s)!`);
+                showBroadcastResult(resultContainer, true, txid, `https://mempool.space/tx/${txid}`, false);
+                
+                // Update the database
+                await updatePsbtBroadcastStatus(psbtData.id, txid);
+                showToast('Transaction Found! 🔍', confs === 0 ? 'Transaction is in the mempool' : `Transaction has ${confs} confirmation(s)`, 'success');
+            } else {
+                updateBroadcastStatus(statusContainer, 'verify', 'warning', 'Could not verify transaction status');
+                showBroadcastResult(resultContainer, true, txid, `https://mempool.space/tx/${txid}`, true);
+                await updatePsbtBroadcastStatus(psbtData.id, txid);
+            }
+            return;
+        }
+        
         updateBroadcastStatus(statusContainer, 'broadcast', 'error', 'All broadcasts failed!');
         showBroadcastResult(resultContainer, false, 'Transaction rejected by all endpoints. The transaction may be invalid.');
         return;
